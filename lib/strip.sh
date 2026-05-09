@@ -47,23 +47,13 @@ cb_bars_provider_sigil() {
 cb_bars_filter_renderable() {
     local allow="${CB_BARS_PROVIDERS:-}"
     if [[ -z "${allow}" ]]; then
-        jq '[ .[] | select((.error // null) == null and (.usage.primary // null) != null) ]'
+        jq '[ .[] | select((.error // null) == null and (.provider | type == "string" and length > 0) and (.usage.primary.usedPercent | type == "number")) ]'
         return
     fi
-    # Comma-separated → jq array literal.
-    local jq_list=""
-    local IFS=,
-    # shellcheck disable=SC2206
-    local items=($allow)
-    local first=1
-    for it in "${items[@]}"; do
-        it="${it// /}"
-        [[ -z "${it}" ]] && continue
-        if (( first )); then jq_list="\"${it}\""; first=0
-        else jq_list="${jq_list},\"${it}\""; fi
-    done
-    jq --argjson allow "[${jq_list}]" \
-       '[ .[] | select((.error // null) == null and (.usage.primary // null) != null and (.provider as $p | $allow | index($p))) ]'
+    jq --arg allow "${allow}" '
+        ($allow | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) as $allow_list
+        | [ .[] | select((.error // null) == null and (.provider | type == "string" and length > 0) and (.usage.primary.usedPercent | type == "number") and (.provider as $p | $allow_list | index($p))) ]
+    '
 }
 
 # Render a single window slot as JSON: { used_pct, remaining_pct, reset_at,
@@ -110,8 +100,9 @@ cb_bars_provider_color_key() {
     local jq_in="$1"
     local lowest
     lowest=$(printf '%s' "${jq_in}" | jq -r '
+        def pct(x): [0, ([100, (x | tonumber | floor)] | min)] | max;
         [ .usage.primary, .usage.secondary, .usage.tertiary ]
-        | map(select(. != null) | (100 - (.usedPercent // 0)))
+        | map(select(. != null and (.usedPercent | type == "number")) | (100 - pct(.usedPercent)))
         | (min // 0)
     ')
     cb_bars_color_key "${lowest}"

@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 BAR="${SCRIPT_DIR}/cb-bars-zellij-bar"
 [[ -x "${BAR}" ]] || cb_bars_die "missing renderer: ${BAR}"
 
-cb_bars_have zellij || cb_bars_die "zellij is required for pipe mode"
+cb_bars_have "${CB_BARS_ZELLIJ_BIN}" || cb_bars_die "zellij is required for pipe mode: ${CB_BARS_ZELLIJ_BIN}"
 
 interval="${CB_BARS_ZELLIJ_PIPE_INTERVAL}"
 widget="${CB_BARS_ZELLIJ_WIDGET}"
@@ -27,7 +27,7 @@ pipe_name="${CB_BARS_ZELLIJ_PIPE_NAME}"
 # zjstatus listens on any name, so we just use a stable id for clarity.
 while :; do
     if output=$("${BAR}" 2>/dev/null) && [[ -n "${output}" ]]; then
-        zellij pipe --name "${pipe_name}" -- \
+        "${CB_BARS_ZELLIJ_BIN}" pipe --name "${pipe_name}" -- \
             "zjstatus::pipe::${widget}::${output}" >/dev/null 2>&1 || true
     fi
     sleep "${interval}"

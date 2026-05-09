@@ -73,6 +73,18 @@ color_for_remaining() {
 }
 
 # ── provider icon: lazily render SVG → PNG ───────────────────────────
+render_fallback_icon_png() {
+    local pid="$1" tmp="$2"
+    local sigil
+    sigil=$(cb_bars_provider_sigil "${pid}")
+    magick -size 64x64 xc:none \
+        -fill "$(mhex "${UNKNOWN_HEX}")" \
+        -draw "circle 32,32 32,4" \
+        -fill "$(mhex "$(cb_bars_palette text)")" \
+        -gravity center -pointsize 28 -annotate 0 "${sigil}" \
+        "PNG32:${tmp}" >/dev/null 2>&1
+}
+
 
 provider_icon_png() {
     local pid="$1"
@@ -85,21 +97,15 @@ provider_icon_png() {
 
     local svg="${CB_BARS_CODEXBAR_RESOURCES}/ProviderIcon-${pid}.svg"
     if [[ ! -r "${svg}" ]]; then
-        # Render a small grey circle with sigil text as a fallback.
-        local sigil
-        sigil=$(cb_bars_provider_sigil "${pid}")
-        if ! magick -size 64x64 xc:none \
-                    -fill "$(mhex "${UNKNOWN_HEX}")" \
-                    -draw "circle 32,32 32,4" \
-                    -fill "$(mhex "$(cb_bars_palette text)")" \
-                    -gravity center -pointsize 28 -annotate 0 "${sigil}" \
-                    "PNG32:${tmp}" >/dev/null 2>&1; then
+        if ! render_fallback_icon_png "${pid}" "${tmp}"; then
             rm -f "${tmp}"; return 1
         fi
     else
         if ! magick -background none -density 300 "${svg}" \
                     -resize 64x64 "PNG32:${tmp}" >/dev/null 2>&1; then
-            rm -f "${tmp}"; return 1
+            if ! render_fallback_icon_png "${pid}" "${tmp}"; then
+                rm -f "${tmp}"; return 1
+            fi
         fi
     fi
     mv -f "${tmp}" "${out}"
@@ -215,18 +221,29 @@ label_for_minutes() {
 
 data=$("${FETCH}" 2>/dev/null || printf '[]')
 
-# We only render providers that have usage.primary; everything else gets
-# implicitly hidden because it was never registered as an item.
+# Providers absent from this filtered row set are hidden below, so stale
+# SketchyBar items do not keep showing old quota data.
 rows=$(printf '%s' "${data}" | jq -r '
     def pct(x): if x == null then 0 else ([0, ([100, (x|tonumber|floor)] | min)] | max) end;
-    [ .[] | select((.error // null) == null and (.usage.primary // null) != null) ]
+    [ .[] | select((.error // null) == null and (.provider | type == "string" and length > 0) and (.usage.primary.usedPercent | type == "number")) ]
     | .[] | [
         .provider,
-        (100 - pct(.usage.primary.usedPercent // 0)),
+        (100 - pct(.usage.primary.usedPercent)),
         (.usage.primary.resetsAt // ""),
         (if .usage.secondary then (100 - pct(.usage.secondary.usedPercent)) else "" end),
         (if .usage.tertiary  then (100 - pct(.usage.tertiary.usedPercent))  else "" end)
     ] | map(tostring) | join("\u001f")')
+
+STATE_FILE="${CACHE_DIR}/providers.txt"
+current_providers=$'\n'
+
+hide_provider() {
+    local pid="$1"
+    sketchybar \
+        --set "cb_bars.${pid}.icon" drawing=off \
+        --set "cb_bars.${pid}.bar" drawing=off \
+        --set "cb_bars.${pid}.label" drawing=off label="" >/dev/null 2>&1 || true
+}
 
 while IFS=$'\x1f' read -r pid rem_p p_reset rem_s rem_t; do
     [[ -n "${pid}" ]] || continue
@@ -242,7 +259,13 @@ while IFS=$'\x1f' read -r pid rem_p p_reset rem_s rem_t; do
     { IFS= read -r label; IFS= read -r color; } < <(label_for_minutes "${minutes}") || true
     [[ -n "${color}" ]] || color="${TEXT_ARGB}"
 
-    args=()
+    current_providers+="${pid}"$'\n'
+
+    args=(
+        --set "cb_bars.${pid}.icon" drawing=on
+        --set "cb_bars.${pid}.bar" drawing=on
+        --set "cb_bars.${pid}.label" drawing=on
+    )
     if [[ -n "${icon}" && -s "${icon}" ]]; then
         args+=( --set "cb_bars.${pid}.icon" background.image="${icon}" )
     fi
@@ -255,3 +278,17 @@ while IFS=$'\x1f' read -r pid rem_p p_reset rem_s rem_t; do
         sketchybar "${args[@]}" >/dev/null 2>&1 || true
     fi
 done <<< "${rows}"
+
+if [[ -f "${STATE_FILE}" ]]; then
+    while IFS= read -r old_pid; do
+        [[ -n "${old_pid}" ]] || continue
+        case "${current_providers}" in
+            *$'\n'"${old_pid}"$'\n'*) ;;
+            *) hide_provider "${old_pid}" ;;
+        esac
+    done < "${STATE_FILE}"
+fi
+
+state_tmp=$(mktemp "${CACHE_DIR}/.providers.XXXXXX") || exit 0
+printf '%s' "${current_providers}" | sed '/^$/d' > "${state_tmp}"
+mv -f "${state_tmp}" "${STATE_FILE}"

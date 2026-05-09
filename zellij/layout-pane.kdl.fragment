@@ -6,6 +6,7 @@
 // at session start, NOT your interactive shell PATH. macOS GUI launches
 // commonly omit ~/.local/bin. Use the absolute path to be safe.
 
+// Requires zjstatus.wasm installed at the configured path. See docs/zellij.md.
 pane size=1 borderless=true {
     plugin location="file:~/.config/zellij/plugins/zjstatus.wasm" {
         // Pipe widget is more stable than `command`; it does not crash
@@ -20,10 +21,12 @@ pane size=1 borderless=true {
     }
 }
 
-// Hidden pane that keeps the pipe loop running. The 1%×1% trick keeps
-// the pane invisible while still letting Zellij start the command.
-// If you installed elsewhere, edit the path below.
-pane x="1%" y="1%" width="1%" height="1%" {
-    command "/Users/REPLACE_ME/.local/bin/cb-bars-zellij-pipe"
-    close_on_exit false
+// Hidden floating pane that keeps the pipe loop running. The 1%×1% trick
+// keeps the pane effectively invisible while still letting Zellij start
+// the command. If you installed elsewhere, edit the path below.
+floating_panes {
+    pane x="99%" y="99%" width="1%" height="1%" {
+        command "/Users/REPLACE_ME/.local/bin/cb-bars-zellij-pipe"
+        close_on_exit false
+    }
 }

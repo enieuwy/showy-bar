@@ -13,4 +13,4 @@
 # set -g status-interval 30
 # set -g status-right-length 200
 
-set -ag status-right ' #(/Users/REPLACE_ME/.local/bin/cb-bars-tmux-bar)'
+if -F '#{m:*cb-bars-tmux-bar*,#{status-right}}' '' 'set -ag status-right " #(/Users/REPLACE_ME/.local/bin/cb-bars-tmux-bar)"'

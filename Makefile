@@ -1,17 +1,18 @@
 # codexbar-bars — install, uninstall, test.
 #
 # `make install` symlinks scripts into ~/.local/bin and the SketchyBar
-# pieces into ~/.config/sketchybar. It refuses to clobber non-symlinks so
-# pre-existing user files are safe.
+# pieces into ~/.config/sketchybar. It refuses to clobber files or retarget
+# existing symlinks unless FORCE=1 is set.
 #
 # All paths are overridable from the command line, e.g.
-#   make install BIN_DIR=~/bin SKETCHYBAR_DIR=/opt/dotfiles/sketchybar
+#   make install BIN_DIR=~/bin SKETCHYBAR=/opt/dotfiles/sketchybar
 
 PREFIX        ?= $(HOME)/.local
 BIN_DIR       ?= $(PREFIX)/bin
 SKETCHYBAR    ?= $(HOME)/.config/sketchybar
 SBAR_ITEMS    ?= $(SKETCHYBAR)/items
 SBAR_PLUGINS  ?= $(SKETCHYBAR)/plugins
+FORCE         ?= 0
 
 REPO          := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BIN_SOURCES   := $(wildcard $(REPO)/bin/cb-bars-*)
@@ -37,6 +38,10 @@ install-bin:
 				printf 'noop  %s -> %s (already current)\n' "$$target" "$$src"; \
 				continue; \
 			fi; \
+			if [ "$(FORCE)" != "1" ]; then \
+				printf 'refusing to retarget %s\n  was: %s\n  now: %s\n  set FORCE=1 to adopt this symlink\n' "$$target" "$$cur" "$$src" >&2; \
+				exit 1; \
+			fi; \
 			printf 'retarget %s\n  was: %s\n  now: %s\n' "$$target" "$$cur" "$$src" >&2; \
 		elif [ -e "$$target" ]; then \
 			printf 'refusing to clobber %s (not a symlink)\n' "$$target" >&2; \
@@ -58,6 +63,10 @@ install-sketchybar:
 				printf 'noop  %s -> %s (already current)\n' "$$target" "$$src"; \
 				continue; \
 			fi; \
+			if [ "$(FORCE)" != "1" ]; then \
+				printf 'refusing to retarget %s\n  was: %s\n  now: %s\n  set FORCE=1 to adopt this symlink\n' "$$target" "$$cur" "$$src" >&2; \
+				exit 1; \
+			fi; \
 			printf 'retarget %s\n  was: %s\n  now: %s\n' "$$target" "$$cur" "$$src" >&2; \
 		elif [ -e "$$target" ]; then \
 			printf 'refusing to clobber %s\n' "$$target" >&2; exit 1; \
@@ -66,14 +75,31 @@ install-sketchybar:
 		printf 'linked %s\n' "$$target"; \
 	done
 
-uninstall: ## Remove every symlink that this Makefile would create.
+uninstall: ## Remove symlinks that this Makefile created.
 	@for src in $(BIN_SOURCES); do \
 		name=$$(basename $$src); \
 		target="$(BIN_DIR)/$$name"; \
-		if [ -L "$$target" ]; then rm -f "$$target"; printf 'removed %s\n' "$$target"; fi; \
+		if [ -L "$$target" ]; then \
+			cur=$$(readlink "$$target"); \
+			if [ "$$cur" = "$$src" ]; then \
+				rm -f "$$target"; printf 'removed %s\n' "$$target"; \
+			else \
+				printf 'skip %s (points to %s)\n' "$$target" "$$cur" >&2; \
+			fi; \
+		fi; \
 	done
-	@for f in $(SBAR_ITEMS)/cb_bars.sh $(SBAR_PLUGINS)/cb_bars.sh; do \
-		if [ -L "$$f" ]; then rm -f "$$f"; printf 'removed %s\n' "$$f"; fi; \
+	@for pair in \
+		"$(REPO)/sketchybar/items/cb_bars.sh:$(SBAR_ITEMS)/cb_bars.sh" \
+		"$(REPO)/sketchybar/plugins/cb_bars.sh:$(SBAR_PLUGINS)/cb_bars.sh"; do \
+		src=$${pair%%:*}; target=$${pair##*:}; \
+		if [ -L "$$target" ]; then \
+			cur=$$(readlink "$$target"); \
+			if [ "$$cur" = "$$src" ]; then \
+				rm -f "$$target"; printf 'removed %s\n' "$$target"; \
+			else \
+				printf 'skip %s (points to %s)\n' "$$target" "$$cur" >&2; \
+			fi; \
+		fi; \
 	done
 
 test: ## Run the smoke-test suite against fixtures (no live codexbar).

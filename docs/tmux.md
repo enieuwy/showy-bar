@@ -12,10 +12,12 @@ Append to your existing `status-right` so `codexbar-bars` cohabits with
 whatever else you display:
 
 ```tmux
-set -ag status-right ' #(cb-bars-tmux-bar)'
+if -F '#{m:*cb-bars-tmux-bar*,#{status-right}}' '' 'set -ag status-right " #(/Users/REPLACE_ME/.local/bin/cb-bars-tmux-bar)"'
 ```
 
-`set -ag` (append) matters — `set -g` would drop your other widgets.
+Use the absolute path to `cb-bars-tmux-bar`; tmux's startup PATH often
+does not include `~/.local/bin`. The guard prevents duplicate segments
+when `.tmux.conf` is sourced repeatedly.
 
 ## Refresh interval
 
@@ -34,6 +36,6 @@ macOS, or via `tmux set-environment -g PATH ...`).
 
 ## Detail popup
 
-`bind-key '/' display-popup -E -h 36 -w 92 -T "CodexBar usage" 'watch -n 30 codexbar usage'`
+`bind-key '/' display-popup -E -h 36 -w 92 -T "CodexBar usage" 'while :; do clear; codexbar usage; sleep 30; done'`
 
 Hit `<prefix>/` to open. CodexBar's text mode is the detail view.

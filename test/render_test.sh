@@ -15,13 +15,42 @@ FIXTURE_DIR="${REPO_ROOT}/test/fixtures"
 TMP=$(mktemp -d -t cb-bars-test.XXXXXX)
 trap 'rm -rf "${TMP}"' EXIT
 
-# ── stub codexbar that just prints whatever fixture we point it at ──
+# ── stub codexbar that validates fetcher argv and prints the fixture ──
 
 stub_dir="${TMP}/bin"
 mkdir -p "${stub_dir}"
 cat > "${stub_dir}/codexbar" <<'EOF'
 #!/bin/sh
 [ -n "${CB_BARS_TEST_FIXTURE:-}" ] || exit 1
+[ "${1:-}" = "usage" ] || exit 90
+shift
+saw_format=0
+saw_provider=0
+saw_pretty=0
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --format)
+            shift
+            [ "${1:-}" = "json" ] || exit 91
+            saw_format=1
+            ;;
+        --provider)
+            shift
+            [ "${1:-}" = "all" ] || exit 92
+            saw_provider=1
+            ;;
+        --pretty)
+            saw_pretty=1
+            ;;
+        --status)
+            ;;
+        *)
+            exit 93
+            ;;
+    esac
+    shift
+done
+[ "${saw_format}" = "1" ] && [ "${saw_provider}" = "1" ] && [ "${saw_pretty}" = "1" ] || exit 94
 cat "${CB_BARS_TEST_FIXTURE}"
 EOF
 chmod +x "${stub_dir}/codexbar"
@@ -166,6 +195,7 @@ printf '\nschema drift\n'
 out=$(run_renderer cb-bars-zellij-bar codexbar-realistic.json)
 assert_contains "float usedPercent renders codex"      "CX" "${out}"
 assert_contains "float usedPercent renders claude"     "CL" "${out}"
+assert_contains "float usedPercent uses GOOD palette" "166;218;149" "${out}"
 
 out=$(run_renderer cb-bars-tmux-bar codexbar-realistic.json)
 assert_contains "tmux float usedPercent renders codex" "CX" "${out}"
@@ -193,6 +223,22 @@ else
     fail "fetcher rejects non-array JSON" "rc=${rc}; cache exists: $([[ -f ${cache}/usage.json ]] && echo yes)"
 fi
 
+# 3b. Fresh but invalid cache must not be emitted as success.
+cache=$(mk_cache)
+printf '%s\n' '[{"provider":"codex","usage":{"primary":{}}}]' > "${cache}/usage.json"
+rc=0
+out=$(
+    CB_BARS_NO_CONFIG=1 \
+    CB_BARS_CACHE_DIR="${cache}" \
+    CB_BARS_CODEXBAR_BIN="${missing_bin:-${TMP}/no-such-codexbar}" \
+    "${REPO_ROOT}/bin/cb-bars-fetch" 2>/dev/null
+) || rc=$?
+if (( rc != 0 )) && [[ -z "${out}" ]]; then
+    ok "fetcher rejects invalid fresh cache"
+else
+    fail "fetcher rejects invalid fresh cache" "rc=${rc}; out=${out}"
+fi
+
 # 4. Missing codexbar binary, no cache → fetcher fails with diagnostic.
 missing_bin="${TMP}/no-such-codexbar"
 cache=$(mk_cache)
@@ -212,6 +258,7 @@ fi
 # 5. Missing codexbar binary, but stale cache exists → serve stale.
 cache=$(mk_cache)
 cp "${FIXTURE_DIR}/codexbar-mixed.json" "${cache}/usage.json"
+touch -t 198801010000 "${cache}/usage.json"
 rc=0
 out=$(
     CB_BARS_NO_CONFIG=1 \
@@ -253,7 +300,7 @@ cat > "${slow_dir}/codexbar" <<EOF
 #!/bin/sh
 [ -n "\${CB_BARS_TEST_COUNTER:-}" ] && printf 'x' >> "\${CB_BARS_TEST_COUNTER}"
 sleep 1
-cat "${FIXTURE_DIR}/codexbar-mixed.json"
+cat "\${CB_BARS_TEST_FIXTURE:-${FIXTURE_DIR}/codexbar-mixed.json}"
 EOF
 chmod +x "${slow_dir}/codexbar"
 
@@ -266,17 +313,36 @@ for path_label in flock mkdir; do
     cache=$(mk_cache)
     counter="${cache}/cb-call-count"
     : > "${counter}"
-    for _ in 1 2 3 4; do
+    pids=()
+    outputs=()
+    for idx in 1 2 3 4; do
+        out_file="${cache}/out.${idx}.json"
+        outputs+=("${out_file}")
         (
             CB_BARS_NO_CONFIG=1 \
             CB_BARS_CACHE_DIR="${cache}" \
             CB_BARS_CODEXBAR_BIN="${slow_dir}/codexbar" \
             CB_BARS_FORCE_NO_FLOCK="${force_no_flock}" \
             CB_BARS_TEST_COUNTER="${counter}" \
-            "${REPO_ROOT}/bin/cb-bars-fetch" >/dev/null 2>&1
+            "${REPO_ROOT}/bin/cb-bars-fetch" > "${out_file}" 2>/dev/null
         ) &
+        pids+=("$!")
     done
-    wait
+
+    all_callers_ok=1
+    for idx in "${!pids[@]}"; do
+        if wait "${pids[$idx]}" && jq -e 'type == "array"' "${outputs[$idx]}" >/dev/null 2>&1; then
+            :
+        else
+            all_callers_ok=0
+        fi
+    done
+    if (( all_callers_ok )); then
+        ok "${path_label} path: every concurrent caller gets valid JSON"
+    else
+        fail "${path_label} path: every concurrent caller gets valid JSON"
+    fi
+
     calls=$(wc -c < "${counter}" | tr -d ' ')
     if (( calls == 1 )); then
         ok "${path_label} path: codexbar invoked exactly once across 4 callers"
@@ -289,6 +355,48 @@ for path_label in flock mkdir; do
         fail "${path_label} path: cache populated"
     fi
 done
+
+printf '\nforced refresh lock wait\n'
+cache=$(mk_cache)
+cp "${FIXTURE_DIR}/codexbar-low.json" "${cache}/usage.json"
+touch -t 198801010000 "${cache}/usage.json"
+counter="${cache}/cb-call-count"
+: > "${counter}"
+pids=()
+outputs=()
+for idx in 1 2 3 4; do
+    out_file="${cache}/refresh.${idx}.json"
+    outputs+=("${out_file}")
+    (
+        CB_BARS_NO_CONFIG=1 \
+        CB_BARS_CACHE_DIR="${cache}" \
+        CB_BARS_CODEXBAR_BIN="${slow_dir}/codexbar" \
+        CB_BARS_TEST_COUNTER="${counter}" \
+        CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-realistic.json" \
+        "${REPO_ROOT}/bin/cb-bars-fetch" --refresh > "${out_file}" 2>/dev/null
+    ) &
+    pids+=("$!")
+done
+
+all_fresh=1
+for idx in "${!pids[@]}"; do
+    if wait "${pids[$idx]}" && grep -F -q 'futureUnknownTopLevelField' "${outputs[$idx]}"; then
+        :
+    else
+        all_fresh=0
+    fi
+done
+if (( all_fresh )); then
+    ok "forced refresh callers wait for refreshed cache"
+else
+    fail "forced refresh callers wait for refreshed cache"
+fi
+calls=$(wc -c < "${counter}" | tr -d ' ')
+if (( calls == 1 )); then
+    ok "forced refresh invokes codexbar once across 4 callers"
+else
+    fail "forced refresh invokes codexbar once across 4 callers" "got ${calls} calls"
+fi
 # ── summary ──────────────────────────────────────────────────────────
 
 printf '\n%d passed, %d failed\n' "${PASSED}" "${FAILED}"

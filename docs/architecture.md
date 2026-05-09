@@ -14,7 +14,7 @@
 
 ```
                 ┌─────────────────────────────────────────────┐
-                │   codexbar usage --format json --pretty     │
+                │ codexbar usage --format json --provider all │
                 └──────────────────────────┬──────────────────┘
                                            │ (slow; 1–10 s cold)
                                            ▼
@@ -38,7 +38,8 @@
 - Stamp file: same path with `.updated-at` suffix.
 - Lock file: same path with `.lock` suffix; either an `flock`-held
   descriptor or a `mkdir`-based lease.
-- Validation: `jq -e 'type == "array"'` before publishing.
+- Validation: `jq` must accept an array of provider objects. If a usage
+  window is present, its `usedPercent` must be numeric before publishing.
 
 The fetcher prints the cache content to stdout regardless of whether it
 just refreshed or served stale bytes. Callers must not differentiate; if
@@ -75,6 +76,7 @@ back to the first two letters of the id.
 ## Adding a new SketchyBar provider
 
 CodexBar discovers providers; this repo discovers them via the cache
-content. So: enable the provider in CodexBar, wait for the next refresh
-cycle, and a new icon/bar/label triple appears automatically. No code
-change required.
+content. So: enable the provider in CodexBar and wait for the next refresh
+cycle. Zellij and tmux will render the new provider automatically. For
+SketchyBar, reload the bar after the new provider appears in the cache so
+the icon/bar/label item triple is declared. No code change required.

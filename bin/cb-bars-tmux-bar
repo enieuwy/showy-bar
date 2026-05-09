@@ -46,9 +46,11 @@ stale=0
 
 rows=$(printf '%s' "${filtered}" | jq -r '
     def pct(x): if x == null then -1 else ([0, ([100, (x|tonumber|floor)] | min)] | max) end;
-    .[] | [
+    .[]
+    | select((.provider | type == "string" and length > 0) and (.usage.primary.usedPercent | type == "number"))
+    | [
         .provider,
-        pct(.usage.primary.usedPercent // 0),
+        pct(.usage.primary.usedPercent),
         (.usage.primary.resetsAt // ""),
         pct(.usage.secondary.usedPercent)
     ] | map(tostring) | join("\u001f")')

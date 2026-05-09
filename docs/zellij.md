@@ -29,11 +29,13 @@ re-emits the strip every `CB_BARS_ZELLIJ_PIPE_INTERVAL` seconds.
 ## Layout snippet
 
 See `zellij/layout-pane.kdl.fragment`. Place the visible widget pane
-where you want the strip; place the hidden command pane anywhere
-(typically at the end of the layout).
+where you want the strip; keep the pipe-loop pane inside `floating_panes`.
+The plugin line assumes `zjstatus.wasm` exists at
+`~/.config/zellij/plugins/zjstatus.wasm`; install zjstatus there or edit
+the `plugin location=...` path before using the fragment.
 
 ## Detail pane
 
 The keybind (`zellij/detail-pane.kdl.fragment`) opens a floating pane
-running `watch -n 30 codexbar usage`. CodexBar's text mode is the detail
-view — there is no custom detail-watch in this repo.
+running `while :; do clear; codexbar usage; sleep 30; done`. CodexBar's
+text mode is the detail view — there is no custom detail-watch in this repo.

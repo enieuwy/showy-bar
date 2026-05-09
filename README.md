@@ -7,7 +7,7 @@ CodexBar handles every provider's auth, cookies, OAuth, parsing, and caching.
 This repo's only job is to render its JSON in three places:
 
 ```
-codexbar usage --format json
+codexbar usage --format json --provider all
        │
        ▼
 bin/cb-bars-fetch     ←  shared cache + flock + last-known-good
@@ -22,10 +22,16 @@ single optional env file.
 
 ## Requirements
 
-- **macOS** (SketchyBar is mac-only; the Zellij/tmux bars work on Linux too).
+- **macOS** for SketchyBar. Zellij/tmux bars also work on Linux when the
+  CodexBar CLI can fetch your chosen providers.
 - [`codexbar`](https://github.com/steipete/CodexBar) on the PATH and
-  configured. Install with `brew install --cask steipete/tap/codexbar` and
-  enable providers in **CodexBar → Preferences → Providers**.
+  configured.
+  - macOS app: `brew install --cask steipete/tap/codexbar`, then enable
+    providers in **CodexBar → Preferences → Providers**.
+  - CLI tarballs / Linux: install the CodexBar CLI from GitHub Releases or
+    `brew install steipete/tap/codexbar`, then configure `~/.codexbar/config.json`.
+    CodexBar's web-backed providers remain macOS-only; CLI/OAuth/API/local
+    providers work where CodexBar supports them.
 - `bash` 4+, `jq`, ImageMagick 7+ (`magick`), and a `date` that understands
   either `-j -f` (BSD/macOS) or `-d` (GNU coreutils).
 - Optional: `flock` for inter-process locking; falls back to a `mkdir`
@@ -38,15 +44,15 @@ icons are bundled in this repo.
 ## Install
 
 ```sh
-git clone https://github.com/<you>/codexbar-bars ~/dev/codexbar-bars
+# Before publishing, replace YOUR_GITHUB_USER with the final repository owner.
+git clone https://github.com/YOUR_GITHUB_USER/codexbar-bars ~/dev/codexbar-bars
 cd ~/dev/codexbar-bars
 make install                   # symlinks bin/* into ~/.local/bin and
                                # SketchyBar pieces into ~/.config/sketchybar
 ```
 
-`make install` refuses to clobber existing non-symlink files, so a
-pre-existing `~/.config/sketchybar/items/cb_bars.sh` will fail loudly
-rather than be overwritten.
+`make install` refuses to clobber existing files and refuses to retarget
+existing symlinks unless you explicitly run with `FORCE=1`.
 
 To uninstall:
 
@@ -72,8 +78,9 @@ data; clicks bring CodexBar.app forward.
 Two pieces:
 
 1. **Pipe loop** — paste `zellij/layout-pane.kdl.fragment` into your
-   default layout (the `pane size=1` widget plus the hidden 1%×1%
-   command pane that runs `cb-bars-zellij-pipe`).
+   default layout (the `pane size=1` widget plus the tiny floating command
+   pane that runs `cb-bars-zellij-pipe`). Install `zjstatus.wasm` first; see
+   [`docs/zellij.md`](docs/zellij.md).
 2. **Detail keybind** — paste `zellij/detail-pane.kdl.fragment` into your
    keybinds block. Default is `Alt /`.
 
@@ -105,7 +112,7 @@ Useful knobs:
 | Variable                          | Default                                | Effect                                                |
 |-----------------------------------|----------------------------------------|-------------------------------------------------------|
 | `CB_BARS_REFRESH_SECONDS`         | `120`                                  | Upper bound on how often `codexbar` itself is invoked |
-| `CB_BARS_PROVIDERS`               | empty (use whatever CodexBar enables)  | Comma-list filter, e.g. `claude,codex`                |
+| `CB_BARS_PROVIDERS`               | empty (render CodexBar `--provider all`) | Comma-list presentation filter, e.g. `claude,codex`   |
 | `CB_BARS_TIME_WARN_MINUTES`       | `30`                                   | Threshold for red countdown labels                    |
 | `CB_BARS_PALETTE_GOOD/WARN/BAD`   | Catppuccin Macchiato                   | 6-char hex (no `#`)                                   |
 | `CB_BARS_SKETCHYBAR_CLICK`        | `open -b com.steipete.codexbar`        | Click action on a SketchyBar item                     |
@@ -114,7 +121,7 @@ Useful knobs:
 ## Verification
 
 ```sh
-make test                         # 18 smoke tests over JSON fixtures
+make test                         # smoke tests over JSON fixtures
 bin/cb-bars-fetch | jq length     # 1+ if CodexBar has providers enabled
 bin/cb-bars-zellij-bar            # ANSI strip
 bin/cb-bars-tmux-bar              # tmux markup

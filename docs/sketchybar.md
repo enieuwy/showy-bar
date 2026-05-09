@@ -23,7 +23,7 @@ visually with whatever other bracket pills you use.
 ## Click action
 
 Clicking any of the three items runs `CB_BARS_SKETCHYBAR_CLICK` (default:
-`open -b com.steipete.CodexBar`), which brings the CodexBar app forward.
+`open -b com.steipete.codexbar`), which brings the CodexBar app forward.
 CodexBar's own menu serves as the detail UI.
 
 ## PNG bar layout

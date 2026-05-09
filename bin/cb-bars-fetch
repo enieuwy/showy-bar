@@ -111,15 +111,30 @@ cb_bars_with_lock() {
     return 2
 }
 
+cache_mtime() {
+    local path="$1"
+    [[ -f "${path}" ]] || { printf '0\n'; return; }
+    stat -f %m "${path}" 2>/dev/null \
+        || stat -c %Y "${path}" 2>/dev/null \
+        || printf '0\n'
+}
+
 # Block up to N tenths of a second for the cache file to appear or refresh.
 # Used by callers that lost the lock; protects against the cold-start case
 # where there is no cache yet.
 cb_bars_wait_for_cache() {
     local max_tenths="${1:-50}"   # 5.0 s
-    local i
+    local min_mtime="${2:-0}"
+    local i mtime
     for (( i=0; i<max_tenths; i++ )); do
         if [[ -s "${CB_BARS_USAGE_FILE}" ]] && cb_bars_json_valid "${CB_BARS_USAGE_FILE}"; then
-            return 0
+            if (( min_mtime <= 0 )); then
+                return 0
+            fi
+            mtime=$(cache_mtime "${CB_BARS_USAGE_FILE}")
+            if (( mtime > min_mtime )); then
+                return 0
+            fi
         fi
         sleep 0.1
     done
@@ -129,7 +144,7 @@ cb_bars_wait_for_cache() {
 # ── core refresh ──────────────────────────────────────────────────────
 
 run_codexbar() {
-    local args=(usage --format json --pretty)
+    local args=(usage --format json --provider all --pretty)
     if [[ "${CB_BARS_INCLUDE_STATUS}" == "1" ]]; then
         args+=(--status)
     fi
@@ -138,8 +153,10 @@ run_codexbar() {
 
 refresh_cache() {
     local out tmp rc
-    tmp=$(mktemp "${CB_BARS_CACHE_DIR}/usage.XXXXXX.json")
-
+    if ! tmp=$(mktemp "${CB_BARS_CACHE_DIR}/usage.XXXXXX.json"); then
+        cb_bars_log "could not create temporary cache file"
+        return 1
+    fi
     if ! command -v "${CB_BARS_CODEXBAR_BIN}" >/dev/null 2>&1; then
         rm -f "${tmp}"
         cb_bars_log "codexbar binary not found: ${CB_BARS_CODEXBAR_BIN}"
@@ -172,26 +189,32 @@ refresh_cache() {
 
 cache_is_fresh() {
     [[ -s "${CB_BARS_USAGE_FILE}" ]] || return 1
+    cb_bars_json_valid "${CB_BARS_USAGE_FILE}" || return 1
     local age
     age=$(cb_bars_age_seconds "${CB_BARS_USAGE_FILE}")
     (( age < CB_BARS_REFRESH_SECONDS ))
 }
 
 lock_rc=0
+pre_refresh_mtime=$(cache_mtime "${CB_BARS_USAGE_FILE}")
 if (( force_refresh )) || ! cache_is_fresh; then
     cb_bars_with_lock refresh_cache || lock_rc=$?
 fi
 
-# Lost the lock contest? Briefly wait for the holder's refresh, but only
-# when our own cache is empty/invalid — if we already have a usable cache
-# we serve it immediately.
-if (( lock_rc == 2 )) && ! [[ -s "${CB_BARS_USAGE_FILE}" ]]; then
-    cb_bars_wait_for_cache 100 || true   # up to 10 s
+# Lost the lock contest? Wait for the holder on cold/invalid cache. For
+# explicit --refresh, wait for a newer valid cache so concurrent callers
+# observe the forced refresh instead of immediately returning stale bytes.
+if (( lock_rc == 2 )); then
+    if (( force_refresh )); then
+        cb_bars_wait_for_cache 100 "${pre_refresh_mtime}" || true
+    elif ! [[ -s "${CB_BARS_USAGE_FILE}" ]] || ! cb_bars_json_valid "${CB_BARS_USAGE_FILE}"; then
+        cb_bars_wait_for_cache 100 || true
+    fi
 fi
 
-# Always emit whatever we have. Bars must never see an empty payload
-# while the cache file exists.
-if [[ -s "${CB_BARS_USAGE_FILE}" ]]; then
+# Always emit the most recent valid cache. Bars must never see malformed
+# payloads as successful output.
+if [[ -s "${CB_BARS_USAGE_FILE}" ]] && cb_bars_json_valid "${CB_BARS_USAGE_FILE}"; then
     cat "${CB_BARS_USAGE_FILE}"
     exit 0
 fi

@@ -46,6 +46,7 @@ cb_bars_load_config
 : "${CB_BARS_ZELLIJ_WIDGET:=pipe_codexbar}"
 : "${CB_BARS_ZELLIJ_PIPE_NAME:=cb-bars}"
 : "${CB_BARS_ZELLIJ_PIPE_INTERVAL:=10}"
+: "${CB_BARS_ZELLIJ_BIN:=zellij}"
 
 : "${CB_BARS_USAGE_FILE:=${CB_BARS_CACHE_DIR}/usage.json}"
 : "${CB_BARS_USAGE_STAMP:=${CB_BARS_CACHE_DIR}/usage.json.updated-at}"
@@ -142,7 +143,9 @@ cb_bars_format_countdown() {
 # Map remaining-percent → palette key (good|warn|bad|unknown).
 cb_bars_color_key() {
     local remaining="$1"
-    [[ "${remaining}" =~ ^-?[0-9]+$ ]] || { printf 'unknown'; return; }
+    [[ "${remaining}" =~ ^-?[0-9]+([.][0-9]+)?$ ]] || { printf 'unknown'; return; }
+    remaining="${remaining%%.*}"
+    [[ "${remaining}" == "-0" ]] && remaining=0
     if (( remaining >= CB_BARS_GOOD_MIN_REMAINING )); then printf 'good'
     elif (( remaining >= CB_BARS_WARN_MIN_REMAINING )); then printf 'warn'
     else printf 'bad'
@@ -166,6 +169,21 @@ cb_bars_palette() {
 cb_bars_json_valid() {
     local file="$1"
     [[ -s "${file}" ]] || return 1
-    cb_bars_have jq || return 0  # if no jq, trust the bytes
-    jq -e 'type == "array"' "${file}" >/dev/null 2>&1
+    cb_bars_have jq || return 1
+    jq -e '
+        type == "array" and
+        all(.[]; type == "object"
+            and (.provider | type == "string" and length > 0)
+            and (
+                (.usage // null) == null
+                or (
+                    (.usage | type) == "object"
+                    and all([.usage.primary, .usage.secondary, .usage.tertiary][];
+                        . == null
+                        or (type == "object" and (.usedPercent | type) == "number")
+                    )
+                )
+            )
+        )
+    ' "${file}" >/dev/null 2>&1
 }

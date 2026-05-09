@@ -47,11 +47,12 @@
     [[ -x "${PLUGIN_PATH}" ]] || PLUGIN_PATH="${PLUGIN_DIR:-}/cb_bars.sh"
 
     CLICK="${CB_BARS_SKETCHYBAR_CLICK}"
+    FETCH="${CB_BARS_FETCH_BIN:-${REPO_ROOT}/bin/cb-bars-fetch}"
 
     # Pull provider list from cache (or live fetch on first run).
-    data=$("${REPO_ROOT}/bin/cb-bars-fetch" 2>/dev/null || printf '[]')
+    data=$("${FETCH}" 2>/dev/null || printf '[]')
     providers=$(printf '%s' "${data}" \
-        | jq -r '[ .[] | select((.error // null) == null and (.usage.primary // null) != null) | .provider ] | .[]')
+        | jq -r '[ .[] | select((.error // null) == null and (.provider | type == "string" and length > 0) and (.usage.primary.usedPercent | type == "number")) | .provider ] | .[]')
 
     [[ -n "${providers}" ]] || exit 0
 
