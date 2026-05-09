@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Initial scaffold: SketchyBar, Zellij, and tmux indicator strips driven by
-  `codexbar usage --format json --provider all`.
+  `codexbar usage --format json`.
 - Shared cache fetcher `bin/cb-bars-fetch` with flock and last-known-good
   fallback.
 - ANSI strip renderer `bin/cb-bars-zellij-bar`.

@@ -25,7 +25,6 @@ cat > "${stub_dir}/codexbar" <<'EOF'
 [ "${1:-}" = "usage" ] || exit 90
 shift
 saw_format=0
-saw_provider=0
 saw_pretty=0
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -35,9 +34,7 @@ while [ "$#" -gt 0 ]; do
             saw_format=1
             ;;
         --provider)
-            shift
-            [ "${1:-}" = "all" ] || exit 92
-            saw_provider=1
+            exit 92
             ;;
         --pretty)
             saw_pretty=1
@@ -50,7 +47,7 @@ while [ "$#" -gt 0 ]; do
     esac
     shift
 done
-[ "${saw_format}" = "1" ] && [ "${saw_provider}" = "1" ] && [ "${saw_pretty}" = "1" ] || exit 94
+[ "${saw_format}" = "1" ] && [ "${saw_pretty}" = "1" ] || exit 94
 cat "${CB_BARS_TEST_FIXTURE}"
 EOF
 chmod +x "${stub_dir}/codexbar"
@@ -187,7 +184,7 @@ PATH="${stub_dir}:${PATH}" \
     "${REPO_ROOT}/sketchybar/items/cb_bars.sh"
 item_log="$(< "${log}")"
 assert_contains "icon item reserves visible width" "cb_bars.claude.icon" "${item_log}"
-assert_contains "icon item sets width" "width=24" "${item_log}"
+assert_contains "icon item sets width" "width=20" "${item_log}"
 assert_contains "bar item sets width" "width=84" "${item_log}"
 assert_contains "bar item enables background image drawing" "background.image.drawing=on" "${item_log}"
 

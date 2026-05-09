@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # codexbar-bars — shared CodexBar JSON fetcher.
 #
-# Returns the cached `codexbar usage --format json --provider all` output.
+# Returns cached `codexbar usage --format json` output.
 # Refreshes the cache when older than CB_BARS_REFRESH_SECONDS, atomically.
 # Always prints the most recent good cache when codexbar fails.
 #
@@ -197,7 +197,7 @@ cb_bars_wait_for_cache() {
 # ── core refresh ──────────────────────────────────────────────────────
 
 run_codexbar() {
-    local args=(usage --format json --provider all --pretty)
+    local args=(usage --format json --pretty)
     if [[ "${CB_BARS_INCLUDE_STATUS}" == "1" ]]; then
         args+=(--status)
     fi

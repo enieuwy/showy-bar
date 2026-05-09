@@ -7,7 +7,7 @@ CodexBar handles every provider's auth, cookies, OAuth, parsing, and caching.
 This repo's only job is to render its JSON in three places:
 
 ```
-codexbar usage --format json --provider all
+codexbar usage --format json
        │
        ▼
 bin/cb-bars-fetch     ←  shared cache + flock + last-known-good
@@ -114,7 +114,7 @@ Useful knobs:
 | Variable                          | Default                                | Effect                                                |
 |-----------------------------------|----------------------------------------|-------------------------------------------------------|
 | `CB_BARS_REFRESH_SECONDS`         | `120`                                  | Upper bound on how often `codexbar` itself is invoked |
-| `CB_BARS_PROVIDERS`               | empty (render CodexBar `--provider all`) | Comma-list presentation filter, e.g. `claude,codex`   |
+| `CB_BARS_PROVIDERS`               | empty (render CodexBar's enabled providers) | Comma-list presentation filter, e.g. `claude,codex`   |
 | `CB_BARS_TIME_WARN_MINUTES`       | `30`                                   | Threshold for red countdown labels                    |
 | `CB_BARS_PALETTE_GOOD/WARN/BAD`   | Catppuccin Macchiato                   | 6-char hex (no `#`)                                   |
 | `CB_BARS_SKETCHYBAR_CLICK`        | `open -b com.steipete.codexbar`        | Click action on a SketchyBar item                     |

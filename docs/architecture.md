@@ -14,7 +14,7 @@
 
 ```
                 ┌─────────────────────────────────────────────┐
-                │ codexbar usage --format json --provider all │
+                │       codexbar usage --format json        │
                 └──────────────────────────┬──────────────────┘
                                            │ (slow; 1–10 s cold)
                                            ▼
