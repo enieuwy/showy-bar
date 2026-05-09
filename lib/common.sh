@@ -26,7 +26,7 @@ cb_bars_load_config
 : "${CB_BARS_CACHE_DIR:=${XDG_CACHE_HOME:-${HOME}/.cache}/codexbar-bars}"
 : "${CB_BARS_CODEXBAR_BIN:=codexbar}"
 : "${CB_BARS_PROVIDERS:=}"
-: "${CB_BARS_INCLUDE_STATUS:=0}"
+: "${CB_BARS_INCLUDE_STATUS:=1}"
 
 : "${CB_BARS_PALETTE_GOOD:=25be6a}"
 : "${CB_BARS_PALETTE_WARN:=f0af00}"
@@ -34,6 +34,7 @@ cb_bars_load_config
 : "${CB_BARS_PALETTE_UNKNOWN:=6c7086}"
 : "${CB_BARS_PALETTE_TRACK:=3a3a4a}"
 : "${CB_BARS_PALETTE_TEXT:=f2f4f8}"
+: "${CB_BARS_PALETTE_ELAPSED:=be95ff}"
 
 : "${CB_BARS_GOOD_MIN_REMAINING:=40}"
 : "${CB_BARS_WARN_MIN_REMAINING:=15}"
@@ -209,6 +210,7 @@ cb_bars_palette() {
         unknown) printf '%s' "${CB_BARS_PALETTE_UNKNOWN}" ;;
         track)   printf '%s' "${CB_BARS_PALETTE_TRACK}" ;;
         text)    printf '%s' "${CB_BARS_PALETTE_TEXT}" ;;
+        elapsed) printf '%s' "${CB_BARS_PALETTE_ELAPSED}" ;;
         *)       printf '%s' "${CB_BARS_PALETTE_UNKNOWN}" ;;
     esac
 }

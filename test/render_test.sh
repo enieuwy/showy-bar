@@ -218,6 +218,28 @@ if grep -q 'width=84' "${log}" 2>/dev/null; then
 else
     fail "plugin repairs bar item width"
 fi
+marker_pixel=$(magick "${cache}/sb/bar-claude.png" -format '%[pixel:p{79,11}]' info: 2>/dev/null || true)
+if [[ "${marker_pixel}" == *"190,149,255"* ]]; then
+    ok "plugin draws elapsed marker line"
+else
+    fail "plugin draws elapsed marker line" "pixel=${marker_pixel}"
+fi
+
+cache=$(mk_cache)
+log="${TMP}/sb-status.log"
+PATH="${stub_dir}:${PATH}" \
+    CB_BARS_NO_CONFIG=1 \
+    CB_BARS_CACHE_DIR="${cache}" \
+    CB_BARS_SKETCHYBAR_IMAGE_CACHE="${cache}/sb" \
+    CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-status-major.json" \
+    CB_BARS_TEST_LOG="${log}" \
+    "${REPO_ROOT}/sketchybar/plugins/cb_bars.sh"
+if [[ -s "${cache}/sb/icon-codex-major.png" ]]; then
+    ok "plugin generates status-tinted icon"
+else
+    fail "plugin generates status-tinted icon"
+fi
+assert_contains "plugin uses status-tinted icon" "icon-codex-major.png" "$(< "${log}")"
 
 cache=$(mk_cache)
 log="${TMP}/sb-filter.log"

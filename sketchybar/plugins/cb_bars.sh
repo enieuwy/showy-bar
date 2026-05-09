@@ -85,6 +85,7 @@ BAD_HEX="$(cb_bars_palette bad)"
 UNKNOWN_HEX="$(cb_bars_palette unknown)"
 TRACK_HEX="$(cb_bars_palette track)"
 TEXT_ARGB="$(argb_from_hex "$(cb_bars_palette text)")"
+ELAPSED_HEX="$(cb_bars_palette elapsed)"
 
 color_for_remaining() {
     local rem="$1"
@@ -93,6 +94,15 @@ color_for_remaining() {
         warn) printf '%s' "${WARN_HEX}" ;;
         bad)  printf '%s' "${BAD_HEX}" ;;
         *)    printf '%s' "${UNKNOWN_HEX}" ;;
+    esac
+}
+
+status_color_for_indicator() {
+    case "${1:-none}" in
+        minor|maintenance) printf '%s' "${WARN_HEX}" ;;
+        major|critical)    printf '%s' "${BAD_HEX}" ;;
+        unknown)           printf '%s' "${UNKNOWN_HEX}" ;;
+        *)                 return 1 ;;
     esac
 }
 
@@ -111,27 +121,46 @@ render_fallback_icon_png() {
 
 
 provider_icon_png() {
-    local pid="$1"
-    local out="${CACHE_DIR}/icon-${pid}.png"
+    local pid="$1" status="${2:-none}"
+    local status_color="" suffix="" out
+    if status_color=$(status_color_for_indicator "${status}"); then
+        suffix="-${status}"
+    fi
+    out="${CACHE_DIR}/icon-${pid}${suffix}.png"
     [[ -s "${out}" ]] && { printf '%s\n' "${out}"; return 0; }
 
-    # Per-process tmp file in the same directory so `mv` is atomic.
-    local tmp
-    tmp=$(mktemp "${CACHE_DIR}/.icon-${pid}.XXXXXX") || return 1
+    # Per-process tmp files in the same directory so `mv` is atomic.
+    local tmp normal_tmp
+    normal_tmp=$(mktemp "${CACHE_DIR}/.icon-${pid}.normal.XXXXXX") || return 1
 
     local svg="${CB_BARS_CODEXBAR_RESOURCES}/ProviderIcon-${pid}.svg"
     if [[ ! -r "${svg}" ]]; then
-        if ! render_fallback_icon_png "${pid}" "${tmp}"; then
-            rm -f "${tmp}"; return 1
+        if ! render_fallback_icon_png "${pid}" "${normal_tmp}"; then
+            rm -f "${normal_tmp}"; return 1
         fi
     else
         if ! magick -background none -density 300 "${svg}" \
-                    -resize 64x64 "PNG32:${tmp}" >/dev/null 2>&1; then
-            if ! render_fallback_icon_png "${pid}" "${tmp}"; then
-                rm -f "${tmp}"; return 1
+                    -resize 64x64 "PNG32:${normal_tmp}" >/dev/null 2>&1; then
+            if ! render_fallback_icon_png "${pid}" "${normal_tmp}"; then
+                rm -f "${normal_tmp}"; return 1
             fi
         fi
     fi
+
+    if [[ -n "${status_color}" ]]; then
+        tmp=$(mktemp "${CACHE_DIR}/.icon-${pid}.status.XXXXXX") || { rm -f "${normal_tmp}"; return 1; }
+        if ! magick "${normal_tmp}" -alpha extract \
+                    -background "$(mhex "${status_color}")" -alpha shape \
+                    "PNG32:${tmp}" >/dev/null 2>&1; then
+            rm -f "${tmp}"
+            tmp="${normal_tmp}"
+        else
+            rm -f "${normal_tmp}"
+        fi
+    else
+        tmp="${normal_tmp}"
+    fi
+
     mv -f "${tmp}" "${out}"
     printf '%s\n' "${out}"
 }
@@ -139,9 +168,10 @@ provider_icon_png() {
 # ── stacked-bar PNG ──────────────────────────────────────────────────
 
 # Args: provider primary_remaining secondary_remaining tertiary_remaining
-# Pass '' (empty) for missing windows. Echoes path on success.
+#       secondary_elapsed_x tertiary_elapsed_x
+# Pass '' (empty) for missing windows/markers. Echoes path on success.
 render_bar_png() {
-    local pid="$1" rem_p="$2" rem_s="$3" rem_t="$4"
+    local pid="$1" rem_p="$2" rem_s="$3" rem_t="$4" marker_s="${5:-}" marker_t="${6:-}"
     local out="${CACHE_DIR}/bar-${pid}.png"
 
     local has_t=0
@@ -203,6 +233,15 @@ render_bar_png() {
         args+=( -fill "$(mhex "${hex}")"
                 -draw "roundrectangle 0,${top} $((fill - 1)),${bot} 3,3" )
     }
+    add_marker() {
+        local marker="$1" top="$2" bot="$3"
+        [[ "${marker}" =~ ^[0-9]+$ ]] || return 0
+        (( marker < 0 )) && marker=0
+        (( marker >= CB_BARS_PNG_BAR_W )) && marker=$((CB_BARS_PNG_BAR_W - 1))
+        args+=( -fill "$(mhex "${ELAPSED_HEX}")"
+                -draw "rectangle ${marker},${top} ${marker},${bot}" )
+    }
+
 
     add_track "${r1_top}" "${r1_bot}"
     add_fill "${f1}" "${r1_top}" "${r1_bot}" "${c1}"
@@ -211,6 +250,10 @@ render_bar_png() {
     if (( has_t )); then
         add_track "${r3_top}" "${r3_bot}"
         add_fill "${f3}" "${r3_top}" "${r3_bot}" "${c3}"
+    fi
+    add_marker "${marker_s}" "${r2_top}" "${r2_bot}"
+    if (( has_t )); then
+        add_marker "${marker_t}" "${r3_top}" "${r3_bot}"
     fi
 
     local tmp
@@ -245,6 +288,24 @@ label_for_minutes() {
 
 data=$("${FETCH}" 2>/dev/null || printf '[]')
 
+elapsed_marker_x() {
+    local reset_at="$1" window_minutes="$2"
+    [[ -n "${reset_at}" && "${window_minutes}" =~ ^[0-9]+$ ]] || return 1
+    (( window_minutes > 0 )) || return 1
+
+    local reset_epoch duration start_epoch now elapsed marker
+    reset_epoch=$(cb_bars_reset_epoch "${reset_at}") || return 1
+    duration=$((window_minutes * 60))
+    start_epoch=$((reset_epoch - duration))
+    now=$(date +%s)
+    elapsed=$((now - start_epoch))
+    (( elapsed < 0 )) && elapsed=0
+    (( elapsed > duration )) && elapsed="${duration}"
+    marker=$(( (duration - elapsed) * CB_BARS_PNG_BAR_W / duration ))
+    (( marker < 0 )) && marker=0
+    (( marker >= CB_BARS_PNG_BAR_W )) && marker=$((CB_BARS_PNG_BAR_W - 1))
+    printf '%s\n' "${marker}"
+}
 # Providers absent from this filtered row set are hidden below, so stale
 # SketchyBar items do not keep showing old quota data.
 filtered=$(printf '%s' "${data}" | cb_bars_filter_renderable)
@@ -255,16 +316,23 @@ rows=$(printf '%s' "${filtered}" | jq -r '
         (100 - pct(.usage.primary.usedPercent)),
         (.usage.primary.resetsAt // .usage.primary.resetDescription // ""),
         (if .usage.secondary then (100 - pct(.usage.secondary.usedPercent)) else "" end),
-        (if .usage.tertiary  then (100 - pct(.usage.tertiary.usedPercent))  else "" end)
+        (.usage.secondary.resetsAt // .usage.secondary.resetDescription // ""),
+        (.usage.secondary.windowMinutes // ""),
+        (if .usage.tertiary  then (100 - pct(.usage.tertiary.usedPercent))  else "" end),
+        (.usage.tertiary.resetsAt // .usage.tertiary.resetDescription // ""),
+        (.usage.tertiary.windowMinutes // ""),
+        (.status.indicator // "none")
     ] | map(tostring) | join("\u001f")')
 current_providers=$'\n'
 
 
-while IFS=$'\x1f' read -r pid rem_p p_reset rem_s rem_t; do
+while IFS=$'\x1f' read -r pid rem_p p_reset rem_s s_reset s_window rem_t t_reset t_window status; do
     [[ -n "${pid}" ]] || continue
 
-    icon=$(provider_icon_png "${pid}" || true)
-    bar=$(render_bar_png "${pid}" "${rem_p}" "${rem_s}" "${rem_t}" || true)
+    icon=$(provider_icon_png "${pid}" "${status}" || true)
+    marker_s=$(elapsed_marker_x "${s_reset}" "${s_window}" || true)
+    marker_t=$(elapsed_marker_x "${t_reset}" "${t_window}" || true)
+    bar=$(render_bar_png "${pid}" "${rem_p}" "${rem_s}" "${rem_t}" "${marker_s}" "${marker_t}" || true)
 
     minutes=""
     if [[ -n "${p_reset}" ]]; then

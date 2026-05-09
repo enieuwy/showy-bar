@@ -115,6 +115,7 @@ Useful knobs:
 |-----------------------------------|----------------------------------------|-------------------------------------------------------|
 | `CB_BARS_REFRESH_SECONDS`         | `120`                                  | Upper bound on how often `codexbar` itself is invoked |
 | `CB_BARS_PROVIDERS`               | empty (render CodexBar's enabled providers) | Comma-list presentation filter, e.g. `claude,codex`   |
+| `CB_BARS_INCLUDE_STATUS`          | `1`                                    | Include CodexBar status for outage-tinted logos       |
 | `CB_BARS_TIME_WARN_MINUTES`       | `30`                                   | Threshold for red countdown labels                    |
 | `CB_BARS_PALETTE_GOOD/WARN/BAD`   | Original ai-quota palette              | 6-char hex (no `#`)                                   |
 | `CB_BARS_SKETCHYBAR_CLICK`        | `open -b com.steipete.codexbar`        | Click action on a SketchyBar item                     |
