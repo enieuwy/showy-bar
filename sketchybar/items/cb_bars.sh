@@ -40,6 +40,8 @@
 
     # shellcheck disable=SC1091
     . "${REPO_ROOT}/lib/common.sh"
+    # shellcheck disable=SC1091
+    . "${REPO_ROOT}/lib/strip.sh"
 
     cb_bars_have jq || { printf 'cb_bars: jq required\n' >&2; exit 0; }
 
@@ -52,7 +54,8 @@
     # Pull provider list from cache (or live fetch on first run).
     data=$("${FETCH}" 2>/dev/null || printf '[]')
     providers=$(printf '%s' "${data}" \
-        | jq -r '[ .[] | select((.error // null) == null and (.provider | type == "string" and length > 0) and (.usage.primary.usedPercent | type == "number")) | .provider ] | .[]')
+        | cb_bars_filter_renderable \
+        | jq -r '.[].provider')
 
     [[ -n "${providers}" ]] || exit 0
 
@@ -66,8 +69,9 @@
                    update_freq="${CB_BARS_SKETCHYBAR_UPDATE_FREQ}" \
                    script="${PLUGIN_PATH}"
 
-    bracket_items=""
-    for pid in ${providers}; do
+    bracket_items=()
+    while IFS= read -r pid; do
+        [[ -n "${pid}" ]] || continue
         sketchybar --add item "cb_bars.${pid}.icon" left \
                    --set "cb_bars.${pid}.icon" \
                        icon.drawing=off \
@@ -95,14 +99,12 @@
                        label.padding_right=4 \
                        click_script="${CLICK}"
 
-        bracket_items="${bracket_items} cb_bars.${pid}.icon cb_bars.${pid}.bar cb_bars.${pid}.label"
-    done
+        bracket_items+=("cb_bars.${pid}.icon" "cb_bars.${pid}.bar" "cb_bars.${pid}.label")
+    done <<< "${providers}"
 
     # Wrap the trio in a single pill so it visually cohabits with other
     # SketchyBar brackets in the user's existing config.
-    # bracket_items intentionally word-splits — sketchybar wants distinct args.
-    # shellcheck disable=SC2086
-    sketchybar --add bracket cb_bars_bracket ${bracket_items} \
+    sketchybar --add bracket cb_bars_bracket "${bracket_items[@]}" \
                --set cb_bars_bracket \
                    background.color=0xcc24273a \
                    background.corner_radius="${PILL_RADIUS:-14}" \

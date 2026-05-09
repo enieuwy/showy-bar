@@ -1,6 +1,6 @@
 // codexbar-bars — Zellij layout snippet that drives a zjstatus pipe with
-// the CodexBar usage strip. Add inside the appropriate `pane` block of
-// your default layout, alongside (or instead of) other zjstatus widgets.
+// the CodexBar usage strip. Add inside a layout or tab block. The visible
+// status pane and `floating_panes` block below must be siblings.
 //
 // IMPORTANT: Zellij resolves `command "..."` against the PATH it inherited
 // at session start, NOT your interactive shell PATH. macOS GUI launches
@@ -21,9 +21,9 @@ pane size=1 borderless=true {
     }
 }
 
-// Hidden floating pane that keeps the pipe loop running. The 1%×1% trick
-// keeps the pane effectively invisible while still letting Zellij start
-// the command. If you installed elsewhere, edit the path below.
+// Hidden floating pane that keeps the pipe loop running. Keep this
+// `floating_panes` block at layout/tab scope, not nested inside another
+// `pane`. If you installed elsewhere, edit the path below.
 floating_panes {
     pane x="99%" y="99%" width="1%" height="1%" {
         command "/Users/REPLACE_ME/.local/bin/cb-bars-zellij-pipe"

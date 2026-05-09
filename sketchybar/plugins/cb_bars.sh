@@ -32,16 +32,40 @@ REPO_ROOT="$(resolve_repo_root)"
 
 # shellcheck disable=SC1091
 . "${REPO_ROOT}/lib/common.sh"
-
-cb_bars_have jq || exit 0
-cb_bars_have magick || {
-    cb_bars_log "magick (ImageMagick 7+) required for sketchybar plugin"
-    exit 0
-}
+# shellcheck disable=SC1091
+. "${REPO_ROOT}/lib/strip.sh"
 
 FETCH="${CB_BARS_FETCH_BIN:-${REPO_ROOT}/bin/cb-bars-fetch}"
 CACHE_DIR="${CB_BARS_SKETCHYBAR_IMAGE_CACHE}"
-mkdir -p "${CACHE_DIR}"
+mkdir -p "${CACHE_DIR}" || exit 0
+STATE_FILE="${CACHE_DIR}/providers.txt"
+
+hide_provider() {
+    local pid="$1"
+    sketchybar \
+        --set "cb_bars.${pid}.icon" drawing=off \
+        --set "cb_bars.${pid}.bar" drawing=off \
+        --set "cb_bars.${pid}.label" drawing=off label="" >/dev/null 2>&1 || true
+}
+
+hide_state_providers() {
+    [[ -f "${STATE_FILE}" ]] || return 0
+    while IFS= read -r old_pid; do
+        [[ -n "${old_pid}" ]] || continue
+        hide_provider "${old_pid}"
+    done < "${STATE_FILE}"
+}
+
+cb_bars_have jq || {
+    cb_bars_log "jq required for sketchybar plugin"
+    hide_state_providers
+    exit 0
+}
+cb_bars_have magick || {
+    cb_bars_log "magick (ImageMagick 7+) required for sketchybar plugin"
+    hide_state_providers
+    exit 0
+}
 
 # Bar geometry. Bars sit inside SketchyBar's pill; tweak via env.
 : "${CB_BARS_PNG_BAR_W:=80}"
@@ -223,27 +247,18 @@ data=$("${FETCH}" 2>/dev/null || printf '[]')
 
 # Providers absent from this filtered row set are hidden below, so stale
 # SketchyBar items do not keep showing old quota data.
-rows=$(printf '%s' "${data}" | jq -r '
+filtered=$(printf '%s' "${data}" | cb_bars_filter_renderable)
+rows=$(printf '%s' "${filtered}" | jq -r '
     def pct(x): if x == null then 0 else ([0, ([100, (x|tonumber|floor)] | min)] | max) end;
-    [ .[] | select((.error // null) == null and (.provider | type == "string" and length > 0) and (.usage.primary.usedPercent | type == "number")) ]
-    | .[] | [
+    .[] | [
         .provider,
         (100 - pct(.usage.primary.usedPercent)),
         (.usage.primary.resetsAt // ""),
         (if .usage.secondary then (100 - pct(.usage.secondary.usedPercent)) else "" end),
         (if .usage.tertiary  then (100 - pct(.usage.tertiary.usedPercent))  else "" end)
     ] | map(tostring) | join("\u001f")')
-
-STATE_FILE="${CACHE_DIR}/providers.txt"
 current_providers=$'\n'
 
-hide_provider() {
-    local pid="$1"
-    sketchybar \
-        --set "cb_bars.${pid}.icon" drawing=off \
-        --set "cb_bars.${pid}.bar" drawing=off \
-        --set "cb_bars.${pid}.label" drawing=off label="" >/dev/null 2>&1 || true
-}
 
 while IFS=$'\x1f' read -r pid rem_p p_reset rem_s rem_t; do
     [[ -n "${pid}" ]] || continue
@@ -262,17 +277,18 @@ while IFS=$'\x1f' read -r pid rem_p p_reset rem_s rem_t; do
     current_providers+="${pid}"$'\n'
 
     args=(
-        --set "cb_bars.${pid}.icon" drawing=on
-        --set "cb_bars.${pid}.bar" drawing=on
-        --set "cb_bars.${pid}.label" drawing=on
+        --set "cb_bars.${pid}.label" drawing=on label="${label}" label.color="${color}"
     )
     if [[ -n "${icon}" && -s "${icon}" ]]; then
-        args+=( --set "cb_bars.${pid}.icon" background.image="${icon}" )
+        args+=( --set "cb_bars.${pid}.icon" drawing=on background.image="${icon}" )
+    else
+        args+=( --set "cb_bars.${pid}.icon" drawing=off )
     fi
     if [[ -n "${bar}" && -s "${bar}" ]]; then
-        args+=( --set "cb_bars.${pid}.bar" background.image="${bar}" )
+        args+=( --set "cb_bars.${pid}.bar" drawing=on background.image="${bar}" )
+    else
+        args+=( --set "cb_bars.${pid}.bar" drawing=off )
     fi
-    args+=( --set "cb_bars.${pid}.label" label="${label}" label.color="${color}" )
 
     if (( ${#args[@]} > 0 )); then
         sketchybar "${args[@]}" >/dev/null 2>&1 || true

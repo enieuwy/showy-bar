@@ -22,6 +22,7 @@ cb_bars_load_config
 # ── defaults ───────────────────────────────────────────────────────────
 
 : "${CB_BARS_REFRESH_SECONDS:=120}"
+: "${CB_BARS_LOCK_WAIT_TENTHS:=100}"
 : "${CB_BARS_CACHE_DIR:=${XDG_CACHE_HOME:-${HOME}/.cache}/codexbar-bars}"
 : "${CB_BARS_CODEXBAR_BIN:=codexbar}"
 : "${CB_BARS_PROVIDERS:=}"
@@ -173,7 +174,7 @@ cb_bars_json_valid() {
     jq -e '
         type == "array" and
         all(.[]; type == "object"
-            and (.provider | type == "string" and length > 0)
+            and (.provider | type == "string" and test("^[A-Za-z0-9_.-]+$"))
             and (
                 (.usage // null) == null
                 or (

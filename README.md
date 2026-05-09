@@ -34,8 +34,8 @@ single optional env file.
     providers work where CodexBar supports them.
 - `bash` 4+, `jq`, ImageMagick 7+ (`magick`), and a `date` that understands
   either `-j -f` (BSD/macOS) or `-d` (GNU coreutils).
-- Optional: `flock` for inter-process locking; falls back to a `mkdir`
-  lease when missing.
+- Optional: `flock` for inter-process locking; falls back to an owner-scoped
+  `mkdir` lock when missing.
 
 The SketchyBar plugin sources provider icons from
 `/Applications/CodexBar.app/Contents/Resources/ProviderIcon-<id>.svg`. No
@@ -44,9 +44,7 @@ icons are bundled in this repo.
 ## Install
 
 ```sh
-# Before publishing, replace YOUR_GITHUB_USER with the final repository owner.
-git clone https://github.com/YOUR_GITHUB_USER/codexbar-bars ~/dev/codexbar-bars
-cd ~/dev/codexbar-bars
+cd /path/to/codexbar-bars
 make install                   # symlinks bin/* into ~/.local/bin and
                                # SketchyBar pieces into ~/.config/sketchybar
 ```

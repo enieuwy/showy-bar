@@ -37,7 +37,7 @@
 - File: `${XDG_CACHE_HOME:-$HOME/.cache}/codexbar-bars/usage.json`
 - Stamp file: same path with `.updated-at` suffix.
 - Lock file: same path with `.lock` suffix; either an `flock`-held
-  descriptor or a `mkdir`-based lease.
+  descriptor or an owner-scoped `mkdir` lock.
 - Validation: `jq` must accept an array of provider objects. If a usage
   window is present, its `usedPercent` must be numeric before publishing.
 

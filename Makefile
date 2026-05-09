@@ -5,7 +5,7 @@
 # existing symlinks unless FORCE=1 is set.
 #
 # All paths are overridable from the command line, e.g.
-#   make install BIN_DIR=~/bin SKETCHYBAR=/opt/dotfiles/sketchybar
+#   make install BIN_DIR="$HOME/bin" SKETCHYBAR=/opt/dotfiles/sketchybar
 
 PREFIX        ?= $(HOME)/.local
 BIN_DIR       ?= $(PREFIX)/bin
@@ -15,7 +15,7 @@ SBAR_PLUGINS  ?= $(SKETCHYBAR)/plugins
 FORCE         ?= 0
 
 REPO          := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-BIN_SOURCES   := $(wildcard $(REPO)/bin/cb-bars-*)
+BIN_NAMES     := cb-bars-fetch cb-bars-tmux-bar cb-bars-zellij-bar cb-bars-zellij-pipe
 
 .PHONY: help install install-bin install-sketchybar uninstall test lint clean
 
@@ -29,8 +29,8 @@ install: install-bin install-sketchybar ## Symlink scripts into the user's stand
 
 install-bin:
 	@mkdir -p "$(BIN_DIR)"
-	@for src in $(BIN_SOURCES); do \
-		name=$$(basename $$src); \
+	@for name in $(BIN_NAMES); do \
+		src="$(REPO)/bin/$$name"; \
 		target="$(BIN_DIR)/$$name"; \
 		if [ -L "$$target" ]; then \
 			cur=$$(readlink "$$target"); \
@@ -76,8 +76,8 @@ install-sketchybar:
 	done
 
 uninstall: ## Remove symlinks that this Makefile created.
-	@for src in $(BIN_SOURCES); do \
-		name=$$(basename $$src); \
+	@for name in $(BIN_NAMES); do \
+		src="$(REPO)/bin/$$name"; \
 		target="$(BIN_DIR)/$$name"; \
 		if [ -L "$$target" ]; then \
 			cur=$$(readlink "$$target"); \
@@ -108,11 +108,15 @@ test: ## Run the smoke-test suite against fixtures (no live codexbar).
 lint: ## Run shellcheck if available.
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		shellcheck -x \
-			$(REPO)/bin/cb-bars-* \
-			$(REPO)/lib/*.sh \
-			$(REPO)/sketchybar/items/cb_bars.sh \
-			$(REPO)/sketchybar/plugins/cb_bars.sh \
-			$(REPO)/test/render_test.sh; \
+			"$(REPO)/bin/cb-bars-fetch" \
+			"$(REPO)/bin/cb-bars-tmux-bar" \
+			"$(REPO)/bin/cb-bars-zellij-bar" \
+			"$(REPO)/bin/cb-bars-zellij-pipe" \
+			"$(REPO)/lib/common.sh" \
+			"$(REPO)/lib/strip.sh" \
+			"$(REPO)/sketchybar/items/cb_bars.sh" \
+			"$(REPO)/sketchybar/plugins/cb_bars.sh" \
+			"$(REPO)/test/render_test.sh"; \
 	else \
 		printf 'shellcheck not installed; skipping\n'; \
 	fi

@@ -28,8 +28,9 @@ re-emits the strip every `CB_BARS_ZELLIJ_PIPE_INTERVAL` seconds.
 
 ## Layout snippet
 
-See `zellij/layout-pane.kdl.fragment`. Place the visible widget pane
-where you want the strip; keep the pipe-loop pane inside `floating_panes`.
+See `zellij/layout-pane.kdl.fragment`. Paste the fragment at layout or tab
+scope. The visible widget pane and `floating_panes` block must be siblings;
+do not nest `floating_panes` inside another `pane`.
 The plugin line assumes `zjstatus.wasm` exists at
 `~/.config/zellij/plugins/zjstatus.wasm`; install zjstatus there or edit
 the `plugin location=...` path before using the fragment.

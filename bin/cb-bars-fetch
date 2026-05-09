@@ -20,7 +20,16 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [[ -L "${SCRIPT_PATH}" ]]; do
+    link=$(readlink "${SCRIPT_PATH}")
+    if [[ "${link}" == /* ]]; then
+        SCRIPT_PATH="${link}"
+    else
+        SCRIPT_PATH="$(cd -- "$(dirname -- "${SCRIPT_PATH}")" && pwd -P)/${link}"
+    fi
+done
+SCRIPT_DIR="$(cd -- "$(dirname -- "${SCRIPT_PATH}")" && pwd -P)"
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../lib/common.sh"
 
@@ -56,11 +65,22 @@ fi
 # ── locking primitives ────────────────────────────────────────────────
 
 # Use flock when available (Linux, Homebrew util-linux); else fall back to
-# `mkdir` lock with a 60s lease.
+# an owner-scoped `mkdir` lock. The fallback intentionally does not steal
+# old lock directories by age: a slow CodexBar refresh is safer than
+# concurrent refresh fan-out. Waiters serve existing cache or fail.
 #
 # Returns:
 #   0 = lock was held and the callee ran;
 #   2 = lock was held by another worker; caller should wait for cache.
+CB_BARS_HELD_LOCK_DIR=""
+
+cb_bars_release_mkdir_lock() {
+    if [[ -n "${CB_BARS_HELD_LOCK_DIR:-}" ]]; then
+        rmdir -- "${CB_BARS_HELD_LOCK_DIR}" 2>/dev/null || true
+        CB_BARS_HELD_LOCK_DIR=""
+    fi
+}
+
 cb_bars_with_lock() {
     if [[ -z "${CB_BARS_FORCE_NO_FLOCK:-}" ]] && cb_bars_have flock; then
         local rc=2
@@ -78,35 +98,16 @@ cb_bars_with_lock() {
     fi
 
     local lock_dir="${CB_BARS_USAGE_LOCK}.d"
-    if mkdir "${lock_dir}" 2>/dev/null; then
-        trap 'rmdir "'"${lock_dir}"'" 2>/dev/null || true' EXIT
+    if mkdir -- "${lock_dir}" 2>/dev/null; then
+        CB_BARS_HELD_LOCK_DIR="${lock_dir}"
+        trap cb_bars_release_mkdir_lock EXIT
         local rc=0
         "$@" || rc=$?
-        rmdir "${lock_dir}" 2>/dev/null || true
+        cb_bars_release_mkdir_lock
         trap - EXIT
         return "${rc}"
     fi
 
-    # Stale lock recovery (older than 60s). Only the winner of `rmdir`
-    # proceeds; loser treats the lock as still held and waits.
-    local mtime now
-    now=$(date +%s)
-    if mtime=$(stat -f %m "${lock_dir}" 2>/dev/null) \
-        || mtime=$(stat -c %Y "${lock_dir}" 2>/dev/null); then
-        if (( now - mtime > 60 )); then
-            if rmdir "${lock_dir}" 2>/dev/null; then
-                # We removed the stale lock; immediately try to claim it.
-                if mkdir "${lock_dir}" 2>/dev/null; then
-                    trap 'rmdir "'"${lock_dir}"'" 2>/dev/null || true' EXIT
-                    local rc=0
-                    "$@" || rc=$?
-                    rmdir "${lock_dir}" 2>/dev/null || true
-                    trap - EXIT
-                    return "${rc}"
-                fi
-            fi
-        fi
-    fi
     cb_bars_log "another fetch in flight (mkdir); will wait"
     return 2
 }
@@ -206,9 +207,10 @@ fi
 # observe the forced refresh instead of immediately returning stale bytes.
 if (( lock_rc == 2 )); then
     if (( force_refresh )); then
-        cb_bars_wait_for_cache 100 "${pre_refresh_mtime}" || true
+        cb_bars_wait_for_cache "${CB_BARS_LOCK_WAIT_TENTHS}" "${pre_refresh_mtime}" \
+            || cb_bars_die "forced refresh did not publish a newer cache"
     elif ! [[ -s "${CB_BARS_USAGE_FILE}" ]] || ! cb_bars_json_valid "${CB_BARS_USAGE_FILE}"; then
-        cb_bars_wait_for_cache 100 || true
+        cb_bars_wait_for_cache "${CB_BARS_LOCK_WAIT_TENTHS}" || true
     fi
 fi
 

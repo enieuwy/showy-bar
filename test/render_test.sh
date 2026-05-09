@@ -143,6 +143,18 @@ assert_contains "tmux markup uses #[default] reset"    "#[default]" "${out}"
 out=$(run_renderer cb-bars-tmux-bar codexbar-empty.json)
 assert_contains "tmux empty fixture renders 'AI idle'" "AI idle" "${out}"
 
+install_bin="${TMP}/install/bin"
+mkdir -p "${install_bin}"
+ln -s "${REPO_ROOT}/bin/cb-bars-tmux-bar" "${install_bin}/cb-bars-tmux-bar"
+out=$(
+    PATH="${stub_dir}:${PATH}" \
+    CB_BARS_NO_CONFIG=1 \
+    CB_BARS_CACHE_DIR="$(mk_cache)" \
+    CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-mixed.json" \
+    "${install_bin}/cb-bars-tmux-bar"
+)
+assert_contains "installed symlink resolves repo lib" "CL" "${out}"
+
 # ── filter ───────────────────────────────────────────────────────────
 
 printf '\nprovider filter\n'
@@ -186,6 +198,19 @@ if grep -q 'label.color=0xff' "${log}" 2>/dev/null; then
 else
     fail "label.color is well-formed"
 fi
+
+cache=$(mk_cache)
+log="${TMP}/sb-filter.log"
+PATH="${stub_dir}:${PATH}" \
+    CB_BARS_NO_CONFIG=1 \
+    CB_BARS_CACHE_DIR="${cache}" \
+    CB_BARS_SKETCHYBAR_IMAGE_CACHE="${cache}/sb" \
+    CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-mixed.json" \
+    CB_BARS_TEST_LOG="${log}" \
+    CB_BARS_PROVIDERS=claude \
+    "${REPO_ROOT}/sketchybar/plugins/cb_bars.sh"
+assert_contains "sketchybar filter includes claude" "cb_bars.claude.label" "$(< "${log}")"
+assert_not_contains "sketchybar filter excludes codex" "cb_bars.codex.label" "$(< "${log}")"
 
 # ── schema drift / edge JSON ────────────────────────────────────────
 
@@ -237,6 +262,23 @@ if (( rc != 0 )) && [[ -z "${out}" ]]; then
     ok "fetcher rejects invalid fresh cache"
 else
     fail "fetcher rejects invalid fresh cache" "rc=${rc}; out=${out}"
+fi
+
+bad_provider="${TMP}/bad-provider.json"
+printf '%s\n' '[{"provider":"bad/id","usage":{"primary":{"usedPercent":12}}}]' > "${bad_provider}"
+cache=$(mk_cache)
+rc=0
+out=$(
+    PATH="${stub_dir}:${PATH}" \
+    CB_BARS_NO_CONFIG=1 \
+    CB_BARS_CACHE_DIR="${cache}" \
+    CB_BARS_TEST_FIXTURE="${bad_provider}" \
+    "${REPO_ROOT}/bin/cb-bars-fetch" 2>/dev/null
+) || rc=$?
+if (( rc != 0 )) && [[ -z "${out}" ]] && ! [[ -f "${cache}/usage.json" ]]; then
+    ok "fetcher rejects unsafe provider ids"
+else
+    fail "fetcher rejects unsafe provider ids" "rc=${rc}; out=${out}"
 fi
 
 # 4. Missing codexbar binary, no cache → fetcher fails with diagnostic.
@@ -396,6 +438,40 @@ if (( calls == 1 )); then
     ok "forced refresh invokes codexbar once across 4 callers"
 else
     fail "forced refresh invokes codexbar once across 4 callers" "got ${calls} calls"
+fi
+
+cache=$(mk_cache)
+cp "${FIXTURE_DIR}/codexbar-low.json" "${cache}/usage.json"
+touch -t 198801010000 "${cache}/usage.json"
+counter="${cache}/timeout-call-count"
+: > "${counter}"
+(
+    CB_BARS_NO_CONFIG=1 \
+    CB_BARS_CACHE_DIR="${cache}" \
+    CB_BARS_CODEXBAR_BIN="${slow_dir}/codexbar" \
+    CB_BARS_FORCE_NO_FLOCK=1 \
+    CB_BARS_TEST_COUNTER="${counter}" \
+    CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-realistic.json" \
+    "${REPO_ROOT}/bin/cb-bars-fetch" --refresh >/dev/null 2>/dev/null
+) &
+holder_pid=$!
+sleep 0.2
+rc=0
+out=$(
+    CB_BARS_NO_CONFIG=1 \
+    CB_BARS_CACHE_DIR="${cache}" \
+    CB_BARS_CODEXBAR_BIN="${slow_dir}/codexbar" \
+    CB_BARS_FORCE_NO_FLOCK=1 \
+    CB_BARS_LOCK_WAIT_TENTHS=1 \
+    CB_BARS_TEST_COUNTER="${counter}" \
+    CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-realistic.json" \
+    "${REPO_ROOT}/bin/cb-bars-fetch" --refresh 2>/dev/null
+) || rc=$?
+wait "${holder_pid}" || true
+if (( rc != 0 )) && [[ -z "${out}" ]]; then
+    ok "forced refresh timeout does not emit stale cache"
+else
+    fail "forced refresh timeout does not emit stale cache" "rc=${rc}; out=${out}"
 fi
 # ── summary ──────────────────────────────────────────────────────────
 

@@ -47,12 +47,12 @@ cb_bars_provider_sigil() {
 cb_bars_filter_renderable() {
     local allow="${CB_BARS_PROVIDERS:-}"
     if [[ -z "${allow}" ]]; then
-        jq '[ .[] | select((.error // null) == null and (.provider | type == "string" and length > 0) and (.usage.primary.usedPercent | type == "number")) ]'
+        jq '[ .[] | select((.error // null) == null and (.provider | type == "string" and test("^[A-Za-z0-9_.-]+$")) and (.usage.primary.usedPercent | type == "number")) ]'
         return
     fi
     jq --arg allow "${allow}" '
         ($allow | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) as $allow_list
-        | [ .[] | select((.error // null) == null and (.provider | type == "string" and length > 0) and (.usage.primary.usedPercent | type == "number") and (.provider as $p | $allow_list | index($p))) ]
+        | [ .[] | select((.error // null) == null and (.provider | type == "string" and test("^[A-Za-z0-9_.-]+$")) and (.usage.primary.usedPercent | type == "number") and (.provider as $p | $allow_list | index($p))) ]
     '
 }
 
