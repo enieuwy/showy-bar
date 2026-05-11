@@ -66,8 +66,12 @@ When a provider has only primary + secondary (most common), the image is
 
 ## Customizing colors
 
-Set `CB_BARS_PALETTE_GOOD/WARN/BAD/UNKNOWN/TRACK/TEXT` in
-`~/.config/codexbar-bars/config.env`. All values are 6-char hex (no `#`).
+Set `CB_BARS_PALETTE_PRIMARY_*` in `~/.config/codexbar-bars/config.env` for
+the minimal palette surface. Secondary and tertiary rows auto-derive from the
+primary palette at `0.55` by default, so the 7d/monthly rows keep the original
+dimmed ai-quota look unless you override `CB_BARS_PALETTE_SECONDARY_*` or
+`CB_BARS_PALETTE_TERTIARY_*` directly. `CB_BARS_PALETTE_TRACK`,
+`CB_BARS_PALETTE_TEXT`, and `CB_BARS_PALETTE_ELAPSED` stay global across rows.
 
 ## Cache
 

@@ -119,13 +119,16 @@ Useful knobs:
 | `CB_BARS_PROVIDERS_EXCLUDE`       | empty                                  | Comma-list exclude-list applied after the allow-list  |
 | `CB_BARS_INCLUDE_STATUS`          | `1`                                    | Include CodexBar status for outage-tinted logos and status-page icon clicks |
 | `CB_BARS_TIME_WARN_MINUTES`       | `30`                                   | Threshold for red countdown labels                    |
-| `CB_BARS_PALETTE_GOOD/WARN/BAD`   | Original ai-quota palette              | 6-char hex (no `#`)                                   |
+| `CB_BARS_THEME`                   | empty                                  | Load `~/.config/codexbar-bars/themes/<name>.env` or the built-in `share/themes/<name>.env` palette |
+| `CB_BARS_PALETTE_PRIMARY_*`       | Original ai-quota palette              | Canonical role-first good/warn/bad/unknown colors     |
 | `CB_BARS_SKETCHYBAR_CLICK`        | `open -b com.steipete.codexbar`        | Default SketchyBar click action; degraded icons open provider status URLs |
 | `CB_BARS_SKETCHYBAR_PILL_*`       | `14` / `28` / `0xcc24273a`             | SketchyBar bracket radius, height, and ARGB color     |
 | `CB_BARS_CODEXBAR_RESOURCES`      | `/Applications/CodexBar.app/...`       | Where to find provider SVGs                           |
 
-`CB_BARS_PROVIDERS` filters first, `CB_BARS_PROVIDERS_EXCLUDE` removes from
-that result second, and the exclude list wins on overlap.
+Secondary and tertiary row colors auto-derive from the primary palette at
+`0.55` by default. Override `CB_BARS_PALETTE_SECONDARY_*`,
+`CB_BARS_PALETTE_TERTIARY_*`, or the `*_SCALE` knobs when you want custom
+per-role colors.
 ## Verification
 
 ```sh

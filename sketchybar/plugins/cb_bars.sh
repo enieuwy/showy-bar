@@ -169,30 +169,19 @@ argb_from_hex() { printf '0xff%s' "$1"; }
 # 6-char hex → '#RRGGBB' for ImageMagick.
 mhex() { printf '#%s' "$1"; }
 
-GOOD_HEX="$(cb_bars_palette good)"
-WARN_HEX="$(cb_bars_palette warn)"
-BAD_HEX="$(cb_bars_palette bad)"
-UNKNOWN_HEX="$(cb_bars_palette unknown)"
+PRIMARY_WARN_HEX="$(cb_bars_role_palette primary warn)"
+PRIMARY_BAD_HEX="$(cb_bars_role_palette primary bad)"
+PRIMARY_UNKNOWN_HEX="$(cb_bars_role_palette primary unknown)"
 TRACK_HEX="$(cb_bars_palette track)"
 TEXT_HEX="$(cb_bars_palette text)"
 TEXT_ARGB="$(argb_from_hex "${TEXT_HEX}")"
 ELAPSED_HEX="$(cb_bars_palette elapsed)"
 
-color_for_remaining() {
-    local rem="$1"
-    case "$(cb_bars_color_key "${rem}")" in
-        good) printf '%s' "${GOOD_HEX}" ;;
-        warn) printf '%s' "${WARN_HEX}" ;;
-        bad)  printf '%s' "${BAD_HEX}" ;;
-        *)    printf '%s' "${UNKNOWN_HEX}" ;;
-    esac
-}
-
 status_color_for_indicator() {
     case "${1:-none}" in
-        minor|maintenance) printf '%s' "${WARN_HEX}" ;;
-        major|critical)    printf '%s' "${BAD_HEX}" ;;
-        unknown)           printf '%s' "${UNKNOWN_HEX}" ;;
+        minor|maintenance) printf '%s' "${PRIMARY_WARN_HEX}" ;;
+        major|critical)    printf '%s' "${PRIMARY_BAD_HEX}" ;;
+        unknown)           printf '%s' "${PRIMARY_UNKNOWN_HEX}" ;;
         *)                 return 1 ;;
     esac
 }
@@ -238,9 +227,9 @@ render_fallback_icon_png() {
     local sigil
     sigil=$(cb_bars_provider_sigil "${pid}")
     magick -size 64x64 xc:none \
-        -fill "$(mhex "${UNKNOWN_HEX}")" \
+        -fill "$(mhex "${PRIMARY_UNKNOWN_HEX}")" \
         -draw "circle 32,32 32,4" \
-        -fill "$(mhex "$(cb_bars_palette text)")" \
+        -fill "$(mhex "${TEXT_HEX}")" \
         -gravity center -pointsize 28 -annotate 0 "${sigil}" \
         "PNG32:${tmp}" >/dev/null 2>&1
 }
@@ -375,9 +364,9 @@ render_bar_png() {
     (( has_t )) && f3=$(fill_w "${rem_t}")
 
     local c1 c2 c3
-    c1=$(color_for_remaining "${rem_p}")
-    c2=$(color_for_remaining "${rem_s}")
-    (( has_t )) && c3=$(color_for_remaining "${rem_t}")
+    c1=$(cb_bars_role_color primary "${rem_p}")
+    c2=$(cb_bars_role_color secondary "${rem_s}")
+    (( has_t )) && c3=$(cb_bars_role_color tertiary "${rem_t}")
 
     local args=( -size "${CB_BARS_PNG_BAR_W}x${image_h}" xc:none )
 

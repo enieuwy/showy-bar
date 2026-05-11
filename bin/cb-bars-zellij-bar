@@ -53,7 +53,7 @@ bold()  { (( want_color )) && printf '\033[1m'; return 0; }
 # ── data load ────────────────────────────────────────────────────────
 
 if ! data=$("${FETCH}" 2>/dev/null) || [[ -z "${data}" ]]; then
-    fg "$(cb_bars_palette unknown)"; printf 'AI ?'; reset; printf '\n'
+    fg "$(cb_bars_role_palette primary unknown)"; printf 'AI ?'; reset; printf '\n'
     exit 0
 fi
 
@@ -95,8 +95,7 @@ while IFS=$'\x1f' read -r provider p_used p_reset s_used _s_reset _t_used _t_res
     [[ -n "${provider}" ]] || continue
 
     p_remaining=$((100 - p_used))
-    color_key=$(cb_bars_color_key "${p_remaining}")
-    color_hex=$(cb_bars_palette "${color_key}")
+    color_hex=$(cb_bars_role_color primary "${p_remaining}")
 
     sigil=$(cb_bars_provider_sigil "${provider}")
     bar=$(cb_bars_block_bar "${p_remaining}")
@@ -112,8 +111,7 @@ while IFS=$'\x1f' read -r provider p_used p_reset s_used _s_reset _t_used _t_res
     if (( s_used >= 0 )); then
         s_remaining=$((100 - s_used))
         if (( s_remaining < p_remaining )); then
-            sw_key=$(cb_bars_color_key "${s_remaining}")
-            weekly_hint="$(fg "$(cb_bars_palette "${sw_key}")")w$(reset)"
+            weekly_hint="$(fg "$(cb_bars_role_color secondary "${s_remaining}")")w$(reset)"
         fi
     fi
 
@@ -128,7 +126,7 @@ while IFS=$'\x1f' read -r provider p_used p_reset s_used _s_reset _t_used _t_res
     (( stale )) && dim
     printf ' '
     if [[ -n "${minutes}" && "${minutes}" -lt "${CB_BARS_TIME_WARN_MINUTES}" ]]; then
-        fg "$(cb_bars_palette bad)"; printf '%s' "${countdown}"; reset
+        fg "$(cb_bars_role_palette primary bad)"; printf '%s' "${countdown}"; reset
     else
         printf '%s' "${countdown}"
     fi

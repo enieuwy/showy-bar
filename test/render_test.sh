@@ -165,6 +165,77 @@ assert_not_contains() {
     fi
 }
 
+assert_equals() {
+    local label="$1" expected="$2" actual="$3"
+    if [[ "${actual}" == "${expected}" ]]; then
+        ok "${label}"
+    else
+        fail "${label}" "expected: ${expected}"
+        printf '    got: %s\n' "${actual}" >&2
+    fi
+}
+
+run_common_eval() {
+    local code="$1"
+    shift
+    # shellcheck disable=SC2016
+    env \
+        CB_BARS_TEST_CODE="${code}" \
+        CB_BARS_TEST_REPO_ROOT="${REPO_ROOT}" \
+        "$@" \
+        bash -lc '
+            set -euo pipefail
+            . "${CB_BARS_TEST_REPO_ROOT}/lib/common.sh"
+            eval "${CB_BARS_TEST_CODE}"
+        '
+}
+
+hex_to_rgb_csv() {
+    local hex="$1"
+    printf '%d,%d,%d' $((16#${hex:0:2})) $((16#${hex:2:2})) $((16#${hex:4:2}))
+}
+
+# ── palette helpers ───────────────────────────────────────────────────
+printf 'palette helpers\n'
+
+out=$(run_common_eval 'cb_bars_scale_hex 25be6a 0.55' CB_BARS_NO_CONFIG=1)
+assert_equals "scale helper matches legacy 0.55 green" "14683a" "${out}"
+
+out=$(run_common_eval 'cb_bars_role_palette primary good' CB_BARS_NO_CONFIG=1)
+assert_equals "primary role palette returns canonical primary color" "25be6a" "${out}"
+
+out=$(run_common_eval 'cb_bars_role_palette secondary good' CB_BARS_NO_CONFIG=1)
+assert_equals "secondary role palette auto-derives from primary" "14683a" "${out}"
+
+out=$(run_common_eval 'cb_bars_role_palette secondary good' CB_BARS_NO_CONFIG=1 CB_BARS_PALETTE_SECONDARY_GOOD=112233)
+assert_equals "secondary role palette honors explicit override" "112233" "${out}"
+
+out=$(run_common_eval 'cb_bars_role_palette tertiary good' CB_BARS_NO_CONFIG=1)
+assert_equals "tertiary role palette auto-derives from primary" "14683a" "${out}"
+
+out=$(run_common_eval 'cb_bars_role_palette tertiary good' CB_BARS_NO_CONFIG=1 CB_BARS_PALETTE_TERTIARY_GOOD=445566)
+assert_equals "tertiary role palette honors explicit override" "445566" "${out}"
+
+# shellcheck disable=SC2016
+out=$(run_common_eval 'printf "%s|%s|%s" "$(cb_bars_role_color primary 50)" "$(cb_bars_role_color secondary 50)" "$(cb_bars_role_color tertiary 50)"' CB_BARS_NO_CONFIG=1)
+assert_equals "role color helper dispatches by role" "25be6a|14683a|14683a" "${out}"
+
+# shellcheck disable=SC2016
+out=$(run_common_eval 'printf "%s|%s" "$(cb_bars_role_palette secondary good)" "$(cb_bars_role_palette tertiary good)"' CB_BARS_NO_CONFIG=1 CB_BARS_PALETTE_SECONDARY_SCALE=0.75 CB_BARS_PALETTE_TERTIARY_SCALE=0.25)
+assert_equals "role scale knobs recompute derived palettes" "1b8e4f|092f1a" "${out}"
+
+out=$(run_common_eval 'cb_bars_role_palette primary good' CB_BARS_NO_CONFIG=1 CB_BARS_THEME=example)
+assert_equals "built-in example theme overrides the primary palette" "89b4fa" "${out}"
+
+theme_xdg="${TMP}/xdg-theme"
+mkdir -p "${theme_xdg}/codexbar-bars"
+printf '%s\n' \
+    'CB_BARS_THEME=example' \
+    'CB_BARS_PALETTE_PRIMARY_GOOD=010203' \
+    > "${theme_xdg}/codexbar-bars/config.env"
+out=$(run_common_eval 'cb_bars_role_palette primary good' CB_BARS_NO_CONFIG= XDG_CONFIG_HOME="${theme_xdg}")
+assert_equals "config env overrides themed primary palette" "010203" "${out}"
+
 # ── zellij renderer ──────────────────────────────────────────────────
 
 printf 'zellij renderer\n'
@@ -174,6 +245,7 @@ assert_contains "renders CL sigil for claude"          "CL"  "${out}"
 assert_contains "renders CX sigil for codex"           "CX"  "${out}"
 assert_contains "renders GE sigil for gemini"          "GE"  "${out}"
 assert_not_contains "skips errored provider (cursor)"  "CR"  "${out}"
+assert_contains "zellij weekly hint uses derived secondary color" "20;104;58m" "${out}"
 
 out=$(run_renderer cb-bars-zellij-bar codexbar-empty.json)
 assert_contains "empty fixture renders 'AI idle'"      "AI idle" "${out}"
@@ -193,6 +265,7 @@ out=$(run_renderer cb-bars-tmux-bar codexbar-mixed.json)
 assert_contains "tmux markup uses #[bold]"             "#[bold]" "${out}"
 assert_contains "tmux markup names claude sigil"       "CL"      "${out}"
 assert_contains "tmux markup uses #[default] reset"    "#[default]" "${out}"
+assert_contains "tmux weekly hint uses derived secondary color" "#[fg=#14683a]w" "${out}"
 
 out=$(run_renderer cb-bars-tmux-bar codexbar-empty.json)
 assert_contains "tmux empty fixture renders 'AI idle'" "AI idle" "${out}"
@@ -302,6 +375,11 @@ if grep -q 'width=84' "${log}" 2>/dev/null; then
 else
     fail "plugin repairs bar item width"
 fi
+expected_role_rgb=$(hex_to_rgb_csv 14683a)
+claude_secondary_pixel=$(magick "${cache}/sb/bar-claude.png" -format '%[pixel:p{10,11}]' info: 2>/dev/null || true)
+assert_contains "plugin uses derived secondary row color" "${expected_role_rgb}" "${claude_secondary_pixel}"
+gemini_tertiary_pixel=$(magick "${cache}/sb/bar-gemini.png" -format '%[pixel:p{10,18}]' info: 2>/dev/null || true)
+assert_contains "plugin uses derived tertiary row color" "${expected_role_rgb}" "${gemini_tertiary_pixel}"
 marker_pixel=$(magick "${cache}/sb/bar-claude.png" -format '%[pixel:p{79,11}]' info: 2>/dev/null || true)
 if [[ "${marker_pixel}" == *"190,149,255"* ]]; then
     ok "plugin draws elapsed marker line"

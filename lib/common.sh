@@ -11,11 +11,32 @@ set -uo pipefail
 cb_bars_load_config() {
     local config_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/codexbar-bars"
     local config_file="${config_dir}/config.env"
+    local theme=""
+    local theme_path=""
+    local repo_root
 
     if [[ -z "${CB_BARS_NO_CONFIG:-}" && -r "${config_file}" ]]; then
         # shellcheck disable=SC1090
         . "${config_file}"
     fi
+
+    theme="${CB_BARS_THEME:-}"
+    [[ -n "${theme}" ]] || return 0
+
+    repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+    for theme_path in \
+        "${config_dir}/themes/${theme}.env" \
+        "${repo_root}/share/themes/${theme}.env"
+    do
+        if [[ -r "${theme_path}" ]]; then
+            # shellcheck disable=SC1090
+            . "${theme_path}"
+            return 0
+        fi
+    done
+
+    printf 'cb-bars: theme %q not found\n' "${theme}" >&2
+    return 1
 }
 cb_bars_load_config
 
@@ -29,10 +50,12 @@ cb_bars_load_config
 : "${CB_BARS_PROVIDERS_EXCLUDE:=}"
 : "${CB_BARS_INCLUDE_STATUS:=1}"
 
-: "${CB_BARS_PALETTE_GOOD:=25be6a}"
-: "${CB_BARS_PALETTE_WARN:=f0af00}"
-: "${CB_BARS_PALETTE_BAD:=ee5396}"
-: "${CB_BARS_PALETTE_UNKNOWN:=6c7086}"
+: "${CB_BARS_PALETTE_PRIMARY_GOOD:=25be6a}"
+: "${CB_BARS_PALETTE_PRIMARY_WARN:=f0af00}"
+: "${CB_BARS_PALETTE_PRIMARY_BAD:=ee5396}"
+: "${CB_BARS_PALETTE_PRIMARY_UNKNOWN:=6c7086}"
+: "${CB_BARS_PALETTE_SECONDARY_SCALE:=0.55}"
+: "${CB_BARS_PALETTE_TERTIARY_SCALE:=0.55}"
 : "${CB_BARS_PALETTE_TRACK:=3a3a4a}"
 : "${CB_BARS_PALETTE_TEXT:=f2f4f8}"
 : "${CB_BARS_PALETTE_ELAPSED:=be95ff}"
@@ -63,6 +86,8 @@ cb_bars_load_config
 : "${CB_BARS_USAGE_FILE:=${CB_BARS_CACHE_DIR}/usage.json}"
 : "${CB_BARS_USAGE_STAMP:=${CB_BARS_CACHE_DIR}/usage.json.updated-at}"
 : "${CB_BARS_USAGE_LOCK:=${CB_BARS_CACHE_DIR}/usage.lock}"
+
+declare -gA CB_BARS_ROLE_PALETTE_CACHE=()
 
 # ── small utilities ────────────────────────────────────────────────────
 
@@ -218,18 +243,90 @@ cb_bars_color_key() {
     fi
 }
 
-# Hex color (no '#') for a palette key.
+cb_bars_scale_hex() {
+    local hex="$1"
+    local factor="${2:-1}"
+    [[ "${hex}" =~ ^[[:xdigit:]]{6}$ ]] || cb_bars_die "invalid palette hex: ${hex}"
+    [[ "${factor}" =~ ^[0-9]+([.][0-9]+)?$ ]] || cb_bars_die "invalid palette scale: ${factor}"
+    local r=$((16#${hex:0:2}))
+    local g=$((16#${hex:2:2}))
+    local b=$((16#${hex:4:2}))
+    awk -v r="${r}" -v g="${g}" -v b="${b}" -v factor="${factor}" 'BEGIN {
+        rr = int(r * factor)
+        gg = int(g * factor)
+        bb = int(b * factor)
+        if (rr > 255) rr = 255
+        if (gg > 255) gg = 255
+        if (bb > 255) bb = 255
+        printf "%02x%02x%02x\n", rr, gg, bb
+    }'
+}
+
+# Hex color (no '#') for a global palette token.
 cb_bars_palette() {
     case "$1" in
-        good)    printf '%s' "${CB_BARS_PALETTE_GOOD}" ;;
-        warn)    printf '%s' "${CB_BARS_PALETTE_WARN}" ;;
-        bad)     printf '%s' "${CB_BARS_PALETTE_BAD}" ;;
-        unknown) printf '%s' "${CB_BARS_PALETTE_UNKNOWN}" ;;
         track)   printf '%s' "${CB_BARS_PALETTE_TRACK}" ;;
         text)    printf '%s' "${CB_BARS_PALETTE_TEXT}" ;;
         elapsed) printf '%s' "${CB_BARS_PALETTE_ELAPSED}" ;;
-        *)       printf '%s' "${CB_BARS_PALETTE_UNKNOWN}" ;;
+        *)       cb_bars_die "unknown global palette token: $1" ;;
     esac
+}
+
+# Hex color (no '#') for a role + severity pair.
+cb_bars_role_palette() {
+    local role="$1"
+    local severity="$2"
+    local cache_key="${role}:${severity}"
+    local role_upper severity_upper result var_name scale_name primary_var
+
+    if [[ -n "${CB_BARS_ROLE_PALETTE_CACHE[${cache_key}]+x}" ]]; then
+        printf '%s' "${CB_BARS_ROLE_PALETTE_CACHE[${cache_key}]}"
+        return 0
+    fi
+
+    case "${role}" in
+        primary)
+            role_upper="PRIMARY"
+            ;;
+        secondary)
+            role_upper="SECONDARY"
+            ;;
+        tertiary)
+            role_upper="TERTIARY"
+            ;;
+        *)
+            cb_bars_die "unknown palette role: ${role}"
+            ;;
+    esac
+
+    case "${severity}" in
+        good|warn|bad|unknown)
+            severity_upper="${severity^^}"
+            ;;
+        *)
+            cb_bars_die "unknown palette severity: ${severity}"
+            ;;
+    esac
+
+    var_name="CB_BARS_PALETTE_${role_upper}_${severity_upper}"
+    if [[ "${role}" == "primary" ]]; then
+        result="${!var_name}"
+    elif [[ -n "${!var_name:-}" ]]; then
+        result="${!var_name}"
+    else
+        primary_var="CB_BARS_PALETTE_PRIMARY_${severity_upper}"
+        scale_name="CB_BARS_PALETTE_${role_upper}_SCALE"
+        result="$(cb_bars_scale_hex "${!primary_var}" "${!scale_name}")"
+    fi
+
+    CB_BARS_ROLE_PALETTE_CACHE["${cache_key}"]="${result}"
+    printf '%s' "${result}"
+}
+
+cb_bars_role_color() {
+    local role="$1"
+    local remaining="$2"
+    cb_bars_role_palette "${role}" "$(cb_bars_color_key "${remaining}")"
 }
 
 # Validate that codexbar JSON looks like an array of provider objects.
