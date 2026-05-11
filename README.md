@@ -71,9 +71,10 @@ make install-sketchybar
 source "$ITEM_DIR/cb_bars.sh"
 ```
 
-Then reload SketchyBar (`sketchybar --reload` or quit + relaunch). One
-icon + bar + label triple appears per provider currently fetching usage
-data; clicks bring CodexBar.app forward.
+Then reload SketchyBar (`sketchybar --reload` or quit + relaunch) once to
+load the trigger item. One icon + bar + label triple appears per provider
+currently fetching usage data; later provider adds/removals land on the next
+plugin tick without another reload.
 
 ### Zellij wiring
 
@@ -114,13 +115,17 @@ Useful knobs:
 | Variable                          | Default                                | Effect                                                |
 |-----------------------------------|----------------------------------------|-------------------------------------------------------|
 | `CB_BARS_REFRESH_SECONDS`         | `120`                                  | Upper bound on how often `codexbar` itself is invoked |
-| `CB_BARS_PROVIDERS`               | empty (render CodexBar's enabled providers) | Comma-list presentation filter, e.g. `claude,codex`   |
-| `CB_BARS_INCLUDE_STATUS`          | `1`                                    | Include CodexBar status for outage-tinted logos       |
+| `CB_BARS_PROVIDERS`               | empty (render CodexBar's enabled providers) | Comma-list allow-list, e.g. `claude,codex`            |
+| `CB_BARS_PROVIDERS_EXCLUDE`       | empty                                  | Comma-list exclude-list applied after the allow-list  |
+| `CB_BARS_INCLUDE_STATUS`          | `1`                                    | Include CodexBar status for outage-tinted logos and status-page icon clicks |
 | `CB_BARS_TIME_WARN_MINUTES`       | `30`                                   | Threshold for red countdown labels                    |
 | `CB_BARS_PALETTE_GOOD/WARN/BAD`   | Original ai-quota palette              | 6-char hex (no `#`)                                   |
-| `CB_BARS_SKETCHYBAR_CLICK`        | `open -b com.steipete.codexbar`        | Click action on a SketchyBar item                     |
+| `CB_BARS_SKETCHYBAR_CLICK`        | `open -b com.steipete.codexbar`        | Default SketchyBar click action; degraded icons open provider status URLs |
+| `CB_BARS_SKETCHYBAR_PILL_*`       | `14` / `28` / `0xcc24273a`             | SketchyBar bracket radius, height, and ARGB color     |
 | `CB_BARS_CODEXBAR_RESOURCES`      | `/Applications/CodexBar.app/...`       | Where to find provider SVGs                           |
 
+`CB_BARS_PROVIDERS` filters first, `CB_BARS_PROVIDERS_EXCLUDE` removes from
+that result second, and the exclude list wins on overlap.
 ## Verification
 
 ```sh
@@ -137,6 +142,8 @@ Cache lives at `${XDG_CACHE_HOME:-~/.cache}/codexbar-bars/usage.json`.
 
 - One `codexbar` invocation per `CB_BARS_REFRESH_SECONDS` regardless of how
   many bars are running.
+- SketchyBar compares the desired provider set to its last declared state once
+  per tick; add/remove and bracket rebuild only happen when that set changes.
 - SketchyBar's plugin only writes a PNG when its bytes change (atomic
   `cmp`-then-`mv`).
 - Provider icon PNGs are generated once per provider per cache directory.
@@ -156,11 +163,6 @@ Cache lives at `${XDG_CACHE_HOME:-~/.cache}/codexbar-bars/usage.json`.
   `2 × CB_BARS_REFRESH_SECONDS`, the Zellij and tmux strips dim every
   provider chunk. SketchyBar continues to render at full strength —
   CodexBar's own menu icon will reflect upstream incidents.
-- **New providers require a SketchyBar reload.** The item set is built
-  when sketchybarrc sources `cb_bars.sh`. If you enable a new provider in
-  CodexBar later, run `sketchybar --reload` (or quit + relaunch) to make
-  the new icon/bar/label triple appear. Zellij and tmux pick up new
-  providers automatically on the next refresh.
 - No Linux-side provider for browser-cookie providers — same constraint
   as CodexBar itself.
 

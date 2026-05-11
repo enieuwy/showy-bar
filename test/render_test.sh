@@ -6,6 +6,7 @@
 # minimal shape. Failures print context and abort the suite.
 #
 # Usage: test/render_test.sh
+# shellcheck disable=SC2030,SC2031
 
 set -uo pipefail
 
@@ -74,19 +75,75 @@ fail()  {
 # Fresh cache dir per test so stale state never leaks.
 mk_cache() { mktemp -d "${TMP}/cache.XXXXXX"; }
 
+fixture_path() {
+    local fixture="$1"
+    if [[ "${fixture}" == /* ]]; then
+        printf '%s' "${fixture}"
+    else
+        printf '%s' "${FIXTURE_DIR}/${fixture}"
+    fi
+}
+
 run_renderer() {
     local renderer="$1" fixture="$2"
+    shift 2
     local cache; cache=$(mk_cache)
-    local out
+    local fixture_file out
+    fixture_file=$(fixture_path "${fixture}")
     out=$(
+        env \
+            PATH="${stub_dir}:${PATH}" \
+            CB_BARS_NO_CONFIG=1 \
+            CB_BARS_CACHE_DIR="${cache}" \
+            CB_BARS_TEST_FIXTURE="${fixture_file}" \
+            CB_BARS_FORCE_COLOR=1 \
+            "$@" \
+            "${REPO_ROOT}/bin/${renderer}" 2>&1
+    )
+    printf '%s' "${out}"
+}
+
+run_sketchybar_items() {
+    local fixture="$1" cache="$2" log="$3"
+    shift 3
+    local fixture_file
+    fixture_file=$(fixture_path "${fixture}")
+    env \
         PATH="${stub_dir}:${PATH}" \
         CB_BARS_NO_CONFIG=1 \
         CB_BARS_CACHE_DIR="${cache}" \
-        CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/${fixture}" \
-        CB_BARS_FORCE_COLOR=1 \
-        "${REPO_ROOT}/bin/${renderer}" 2>&1
-    )
-    printf '%s' "${out}"
+        CB_BARS_SKETCHYBAR_IMAGE_CACHE="${cache}/sb" \
+        CB_BARS_TEST_FIXTURE="${fixture_file}" \
+        CB_BARS_TEST_LOG="${log}" \
+        "$@" \
+        "${REPO_ROOT}/sketchybar/items/cb_bars.sh"
+}
+
+run_sketchybar_plugin() {
+    local fixture="$1" cache="$2" log="$3"
+    shift 3
+    local fixture_file
+    fixture_file=$(fixture_path "${fixture}")
+    env \
+        PATH="${stub_dir}:${PATH}" \
+        CB_BARS_NO_CONFIG=1 \
+        CB_BARS_CACHE_DIR="${cache}" \
+        CB_BARS_SKETCHYBAR_IMAGE_CACHE="${cache}/sb" \
+        CB_BARS_TEST_FIXTURE="${fixture_file}" \
+        CB_BARS_TEST_LOG="${log}" \
+        "$@" \
+        "${REPO_ROOT}/sketchybar/plugins/cb_bars.sh"
+}
+
+seed_sketchybar_state() {
+    local cache="$1"
+    shift
+    mkdir -p "${cache}/sb"
+    : > "${cache}/sb/providers.txt"
+    local pid
+    for pid in "$@"; do
+        printf '%s\n' "${pid}" >> "${cache}/sb/providers.txt"
+    done
 }
 
 assert_contains() {
@@ -156,51 +213,76 @@ assert_contains "installed symlink resolves repo lib" "CL" "${out}"
 
 printf '\nprovider filter\n'
 
-cache=$(mk_cache)
-out=$(
-    PATH="${stub_dir}:${PATH}" \
-    CB_BARS_NO_CONFIG=1 \
-    CB_BARS_CACHE_DIR="${cache}" \
-    CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-mixed.json" \
-    CB_BARS_PROVIDERS=claude \
-    NO_COLOR=1 \
-    "${REPO_ROOT}/bin/cb-bars-zellij-bar"
-)
+out=$(run_renderer cb-bars-zellij-bar codexbar-mixed.json CB_BARS_PROVIDERS=claude NO_COLOR=1)
 assert_contains "filter restricts to claude"           "CL" "${out}"
 assert_not_contains "filter excludes codex"            "CX" "${out}"
 assert_not_contains "filter excludes gemini"           "GE" "${out}"
 
-# ── sketchybar item declaration (without sketchybar daemon) ───────────
+out=$(run_renderer cb-bars-zellij-bar codexbar-mixed.json CB_BARS_PROVIDERS_EXCLUDE=codex NO_COLOR=1)
+assert_contains "exclude-only keeps claude"            "CL" "${out}"
+assert_not_contains "exclude-only drops codex"         "CX" "${out}"
+assert_contains "exclude-only keeps gemini"            "GE" "${out}"
 
-printf '\nsketchybar item declaration\n'
+out=$(run_renderer cb-bars-tmux-bar codexbar-mixed.json CB_BARS_PROVIDERS_EXCLUDE=codex)
+assert_not_contains "tmux exclude-only drops codex"    "CX" "${out}"
+
+out=$(run_renderer cb-bars-zellij-bar codexbar-mixed.json CB_BARS_PROVIDERS='claude,codex' CB_BARS_PROVIDERS_EXCLUDE=codex NO_COLOR=1)
+assert_contains "include+exclude keeps claude"         "CL" "${out}"
+assert_not_contains "include+exclude drops codex"      "CX" "${out}"
+assert_not_contains "include+exclude drops gemini"     "GE" "${out}"
+
+# ── sketchybar bootstrap (without sketchybar daemon) ────────────────────
+
+printf '\nsketchybar bootstrap\n'
 
 cache=$(mk_cache)
 log="${TMP}/sb-items.log"
-PATH="${stub_dir}:${PATH}" \
-    CB_BARS_NO_CONFIG=1 \
-    CB_BARS_CACHE_DIR="${cache}" \
-    CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-mixed.json" \
-    CB_BARS_TEST_LOG="${log}" \
-    "${REPO_ROOT}/sketchybar/items/cb_bars.sh"
+run_sketchybar_items codexbar-mixed.json "${cache}" "${log}"
 item_log="$(< "${log}")"
-assert_contains "icon item reserves visible width" "cb_bars.claude.icon" "${item_log}"
-assert_contains "icon item sets width" "width=22" "${item_log}"
-assert_contains "bar item sets width" "width=84" "${item_log}"
-assert_contains "bar item enables background image drawing" "background.image.drawing=on" "${item_log}"
+assert_contains "bootstrap declares trigger item" "cb_bars.trigger drawing=off updates=on" "${item_log}"
+assert_contains "bootstrap synchronously adds provider items" "--add item cb_bars.claude.icon left" "${item_log}"
+assert_contains "bootstrap recreates bracket immediately" "--add bracket cb_bars_bracket" "${item_log}"
+assert_contains "bootstrap preserves icon width" "width=22" "${item_log}"
+assert_contains "bootstrap preserves bar width" "width=84" "${item_log}"
 
-# ── sketchybar plugin (without sketchybar daemon) ────────────────────
+cache=$(mk_cache)
+seed_sketchybar_state "${cache}" claude codex gemini
+log="${TMP}/sb-items-stale.log"
+run_sketchybar_items codexbar-mixed.json "${cache}" "${log}"
+item_log="$(< "${log}")"
+assert_contains "bootstrap ignores stale provider state" "--add item cb_bars.gemini.icon left" "${item_log}"
+
+cache=$(mk_cache)
+seed_sketchybar_state "${cache}" claude codex gemini
+log="${TMP}/sb-items-empty.log"
+run_sketchybar_items codexbar-mixed.json "${cache}" "${log}" CB_BARS_PROVIDERS_EXCLUDE='claude,codex,gemini'
+item_log="$(< "${log}")"
+assert_contains "bootstrap removes stale providers when desired set is empty" "--remove cb_bars.gemini.icon --remove cb_bars.gemini.bar --remove cb_bars.gemini.label" "${item_log}"
+assert_contains "bootstrap removes stale bracket when desired set is empty" "--remove cb_bars_bracket" "${item_log}"
+
+cache=$(mk_cache)
+log="${TMP}/sb-items-click.log"
+# shellcheck disable=SC2030,SC2031
+(
+    PATH="${stub_dir}:${PATH}"
+    export CB_BARS_NO_CONFIG=1
+    export CB_BARS_CACHE_DIR="${cache}"
+    export CB_BARS_SKETCHYBAR_IMAGE_CACHE="${cache}/sb"
+    export CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-mixed.json"
+    export CB_BARS_TEST_LOG="${log}"
+    CB_BARS_SKETCHYBAR_CLICK='custom-click'
+    . "${REPO_ROOT}/sketchybar/items/cb_bars.sh"
+)
+item_log="$(< "${log}")"
+assert_contains "bootstrap exports non-exported click override" "click_script=custom-click" "${item_log}"
+
+# ── sketchybar plugin (without sketchybar daemon) ───────────────────────
 
 printf '\nsketchybar plugin (PNG generation)\n'
 
 cache=$(mk_cache)
 log="${TMP}/sb.log"
-PATH="${stub_dir}:${PATH}" \
-    CB_BARS_NO_CONFIG=1 \
-    CB_BARS_CACHE_DIR="${cache}" \
-    CB_BARS_SKETCHYBAR_IMAGE_CACHE="${cache}/sb" \
-    CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-mixed.json" \
-    CB_BARS_TEST_LOG="${log}" \
-    "${REPO_ROOT}/sketchybar/plugins/cb_bars.sh"
+run_sketchybar_plugin codexbar-mixed.json "${cache}" "${log}"
 
 if [[ -s "${cache}/sb/bar-claude.png" ]]; then ok "claude bar PNG generated"
 else fail "claude bar PNG generated"; fi
@@ -235,44 +317,87 @@ fi
 
 cache=$(mk_cache)
 log="${TMP}/sb-status.log"
-PATH="${stub_dir}:${PATH}" \
-    CB_BARS_NO_CONFIG=1 \
-    CB_BARS_CACHE_DIR="${cache}" \
-    CB_BARS_SKETCHYBAR_IMAGE_CACHE="${cache}/sb" \
-    CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-status-major.json" \
-    CB_BARS_TEST_LOG="${log}" \
-    "${REPO_ROOT}/sketchybar/plugins/cb_bars.sh"
-if [[ -s "${cache}/sb/icon-codex-major.png" ]]; then
+run_sketchybar_plugin codexbar-status-major.json "${cache}" "${log}"
+if [[ -s "${cache}/sb/icon-v2-codex-major.png" ]]; then
     ok "plugin generates status-tinted icon"
 else
     fail "plugin generates status-tinted icon"
 fi
-assert_contains "plugin uses status-tinted icon" "icon-codex-major.png" "$(< "${log}")"
+status_log="$(< "${log}")"
+assert_contains "plugin uses status-tinted icon" "icon-v2-codex-major.png" "${status_log}"
+assert_contains "plugin routes degraded status icon to provider status page" "click_script=open 'https://status.openai.com/'" "${status_log}"
+
+opencode_fixture="${TMP}/codexbar-opencode.json"
+printf '%s\n' '[{"provider":"opencode","usage":{"primary":{"usedPercent":12,"windowMinutes":300,"resetsAt":"2099-01-01T05:40:00Z"}}}]' > "${opencode_fixture}"
+resource_dir="${TMP}/opencode-resources"
+mkdir -p "${resource_dir}"
+printf '%s\n' '<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M80 88H20V12H80V88ZM35 27H65V72H35V27Z" fill="#211E1E"/></svg>' > "${resource_dir}/ProviderIcon-opencode.svg"
+cache=$(mk_cache)
+log="${TMP}/sb-opencode.log"
+run_sketchybar_plugin "${opencode_fixture}" "${cache}" "${log}" CB_BARS_CODEXBAR_RESOURCES="${resource_dir}"
+if [[ -s "${cache}/sb/icon-v2-opencode.png" ]]; then
+    ok "plugin generates tinted dark icon"
+else
+    fail "plugin generates tinted dark icon"
+fi
+opencode_mean=$(magick "${cache}/sb/icon-v2-opencode.png" -background black -alpha remove -format '%[fx:(mean.r+mean.g+mean.b)/3]' info: 2>/dev/null || true)
+if awk -v mean="${opencode_mean:-0}" 'BEGIN { exit !(mean > 0.25) }'; then
+    ok "plugin tints near-black monochrome icons to text color"
+else
+    fail "plugin tints near-black monochrome icons to text color" "mean=${opencode_mean}"
+fi
 
 cache=$(mk_cache)
 log="${TMP}/sb-idle.log"
-PATH="${stub_dir}:${PATH}" \
-    CB_BARS_NO_CONFIG=1 \
-    CB_BARS_CACHE_DIR="${cache}" \
-    CB_BARS_SKETCHYBAR_IMAGE_CACHE="${cache}/sb" \
-    CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-idle-no-reset.json" \
-    CB_BARS_TEST_LOG="${log}" \
-    "${REPO_ROOT}/sketchybar/plugins/cb_bars.sh"
+run_sketchybar_plugin codexbar-idle-no-reset.json "${cache}" "${log}"
 assert_contains "plugin uses idle label when reset missing at 100%" "label=idle" "$(< "${log}")"
+
+printf '\nsketchybar plugin (lifecycle diff)\n'
+
+cache=$(mk_cache)
+seed_sketchybar_state "${cache}" claude codex
+log="${TMP}/sb-add.log"
+run_sketchybar_plugin codexbar-mixed.json "${cache}" "${log}"
+plugin_log="$(< "${log}")"
+assert_contains "plugin adds newly visible provider" "--add item cb_bars.gemini.label left" "${plugin_log}"
+assert_not_contains "plugin does not re-add declared providers" "--add item cb_bars.codex.label left" "${plugin_log}"
+assert_contains "plugin rebuilds bracket with added provider" "cb_bars.gemini.icon cb_bars.gemini.bar cb_bars.gemini.label --set cb_bars_bracket" "${plugin_log}"
+
+drop_fixture="${TMP}/codexbar-no-gemini.json"
+jq '[ .[] | select(.provider != "gemini") ]' "${FIXTURE_DIR}/codexbar-mixed.json" > "${drop_fixture}"
+cache=$(mk_cache)
+seed_sketchybar_state "${cache}" claude codex gemini
+log="${TMP}/sb-remove.log"
+run_sketchybar_plugin "${drop_fixture}" "${cache}" "${log}"
+plugin_log="$(< "${log}")"
+assert_contains "plugin removes dropped provider" "--remove cb_bars.gemini.icon --remove cb_bars.gemini.bar --remove cb_bars.gemini.label" "${plugin_log}"
+
+cache=$(mk_cache)
+seed_sketchybar_state "${cache}" claude codex gemini
+log="${TMP}/sb-unchanged.log"
+run_sketchybar_plugin codexbar-mixed.json "${cache}" "${log}"
+plugin_log="$(< "${log}")"
+assert_not_contains "plugin unchanged set skips item adds" "--add item cb_bars." "${plugin_log}"
+assert_not_contains "plugin unchanged set skips bracket rebuild" "--add bracket cb_bars_bracket" "${plugin_log}"
+assert_not_contains "plugin unchanged set skips provider removals" "--remove cb_bars." "${plugin_log}"
+assert_not_contains "plugin unchanged set skips bracket removal" "--remove cb_bars_bracket" "${plugin_log}"
+assert_contains "plugin unchanged set still updates providers" "--set cb_bars.claude.label" "${plugin_log}"
 
 cache=$(mk_cache)
 log="${TMP}/sb-filter.log"
-PATH="${stub_dir}:${PATH}" \
-    CB_BARS_NO_CONFIG=1 \
-    CB_BARS_CACHE_DIR="${cache}" \
-    CB_BARS_SKETCHYBAR_IMAGE_CACHE="${cache}/sb" \
-    CB_BARS_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-mixed.json" \
-    CB_BARS_TEST_LOG="${log}" \
-    CB_BARS_PROVIDERS=claude \
-    "${REPO_ROOT}/sketchybar/plugins/cb_bars.sh"
-assert_contains "sketchybar filter includes claude" "cb_bars.claude.label" "$(< "${log}")"
-assert_not_contains "sketchybar filter excludes codex" "cb_bars.codex.label" "$(< "${log}")"
+run_sketchybar_plugin codexbar-mixed.json "${cache}" "${log}" CB_BARS_PROVIDERS_EXCLUDE=codex
+plugin_log="$(< "${log}")"
+assert_contains "sketchybar exclude-only keeps claude" "cb_bars.claude.label" "${plugin_log}"
+assert_not_contains "sketchybar exclude-only drops codex" "cb_bars.codex.label" "${plugin_log}"
+assert_contains "sketchybar exclude-only keeps gemini" "cb_bars.gemini.label" "${plugin_log}"
 
+cache=$(mk_cache)
+log="${TMP}/sb-filter-overlap.log"
+run_sketchybar_plugin codexbar-mixed.json "${cache}" "${log}" CB_BARS_PROVIDERS='claude,codex' CB_BARS_PROVIDERS_EXCLUDE=codex
+plugin_log="$(< "${log}")"
+assert_contains "sketchybar include+exclude keeps claude" "cb_bars.claude.label" "${plugin_log}"
+assert_not_contains "sketchybar include+exclude drops codex" "cb_bars.codex.label" "${plugin_log}"
+assert_not_contains "sketchybar include+exclude drops gemini" "cb_bars.gemini.label" "${plugin_log}"
 # ── schema drift / edge JSON ────────────────────────────────────────
 
 printf '\nschema drift\n'

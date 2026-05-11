@@ -43,16 +43,26 @@ cb_bars_provider_sigil() {
 }
 
 # Filter the cached JSON down to renderable provider records, honoring
-# CB_BARS_PROVIDERS when set. Reads from stdin, writes JSON array to stdout.
+# CB_BARS_PROVIDERS and CB_BARS_PROVIDERS_EXCLUDE when set. Reads from stdin,
+# writes JSON array to stdout.
 cb_bars_filter_renderable() {
     local allow="${CB_BARS_PROVIDERS:-}"
-    if [[ -z "${allow}" ]]; then
-        jq '[ .[] | select((.error // null) == null and (.provider | type == "string" and test("^[A-Za-z0-9_.-]+$")) and (.usage.primary.usedPercent | type == "number")) ]'
-        return
-    fi
-    jq --arg allow "${allow}" '
-        ($allow | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) as $allow_list
-        | [ .[] | select((.error // null) == null and (.provider | type == "string" and test("^[A-Za-z0-9_.-]+$")) and (.usage.primary.usedPercent | type == "number") and (.provider as $p | $allow_list | index($p))) ]
+    local exclude="${CB_BARS_PROVIDERS_EXCLUDE:-}"
+    jq --arg allow "${allow}" --arg exclude "${exclude}" '
+        def list($raw):
+            $raw
+            | split(",")
+            | map(gsub("^\\s+|\\s+$"; ""))
+            | map(select(length > 0));
+        (list($allow)) as $allow_list
+        | (list($exclude)) as $exclude_list
+        | [ .[] | select(
+            (.error // null) == null
+            and (.provider | type == "string" and test("^[A-Za-z0-9_.-]+$"))
+            and (.usage.primary.usedPercent | type == "number")
+            and (.provider as $p | (($allow_list | length) == 0 or ($allow_list | index($p) != null)))
+            and (.provider as $p | ($exclude_list | index($p) == null))
+        ) ]
     '
 }
 

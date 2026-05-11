@@ -2,7 +2,8 @@
 
 ## What gets added
 
-Per provider returned by `codexbar usage --format json`:
+Per provider in the filtered render set (`codexbar usage --format json`
+after `CB_BARS_PROVIDERS` / `CB_BARS_PROVIDERS_EXCLUDE` are applied):
 
 - `cb_bars.<provider>.icon`  — provider PNG (rendered from CodexBar's SVG)
 - `cb_bars.<provider>.bar`   — multi-segment usage bar PNG
@@ -14,17 +15,39 @@ Plus:
   `CB_BARS_SKETCHYBAR_UPDATE_FREQ` seconds.
 - `cb_bars_bracket`     — pill background grouping the triple.
 
+Provider adds/removals reconcile against that filtered set on the next plugin
+tick; no `sketchybar --reload` is required after the initial install.
+
 ## Pill geometry
 
-The bracket reads `PILL_RADIUS` and `PILL_HEIGHT` from your existing
-sketchybarrc env, falling back to 14/28. So `codexbar-bars` cohabits
-visually with whatever other bracket pills you use.
+The bracket reads `CB_BARS_SKETCHYBAR_PILL_RADIUS`,
+`CB_BARS_SKETCHYBAR_PILL_HEIGHT`, and `CB_BARS_SKETCHYBAR_PILL_COLOR`.
+Defaults are `14`, `28`, and `0xcc24273a`.
+
+For compatibility with existing sketchybarrc setups, the bootstrap item also
+forwards `PILL_RADIUS` / `PILL_HEIGHT` into those envs when the explicit
+`CB_BARS_SKETCHYBAR_PILL_*` knobs are unset.
 
 ## Click action
 
-Clicking any of the three items runs `CB_BARS_SKETCHYBAR_CLICK` (default:
-`open -b com.steipete.codexbar`), which brings the CodexBar app forward.
-CodexBar's own menu serves as the detail UI.
+Clicking the usage bar, label, or a non-degraded provider icon runs
+`CB_BARS_SKETCHYBAR_CLICK` (default: `open -b com.steipete.codexbar`),
+which brings the CodexBar app forward. When a provider status is degraded
+(`minor`, `maintenance`, `major`, or `critical`) and CodexBar supplies an
+HTTP(S) status URL, clicking that provider's icon opens the status page
+instead.
+
+## Provider filters
+
+`CB_BARS_PROVIDERS` is an allow-list. `CB_BARS_PROVIDERS_EXCLUDE` removes
+providers from that result afterward, so the exclude list wins on overlap.
+
+Examples:
+
+- empty / empty → every provider CodexBar currently reports
+- include only → only those providers
+- exclude only → everything except those providers
+- include + exclude → the include set minus the exclude set
 
 ## PNG bar layout
 
@@ -56,7 +79,3 @@ refresh; only changed images are written.
 
 - The plugin does not dim or annotate when the cache is stale. Zellij and
   tmux do; SketchyBar relies on CodexBar's own menu for incident hints.
-- New providers added in CodexBar after sketchybarrc was sourced require
-  `sketchybar --reload` to appear, because items are declared once when
-  this file is sourced. The plugin's timer only updates already-declared
-  items.

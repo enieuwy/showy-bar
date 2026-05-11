@@ -39,31 +39,121 @@ FETCH="${CB_BARS_FETCH_BIN:-${REPO_ROOT}/bin/cb-bars-fetch}"
 CACHE_DIR="${CB_BARS_SKETCHYBAR_IMAGE_CACHE}"
 mkdir -p "${CACHE_DIR}" || exit 0
 STATE_FILE="${CACHE_DIR}/providers.txt"
+CLICK="${CB_BARS_SKETCHYBAR_CLICK}"
 
-hide_provider() {
-    local pid="$1"
-    sketchybar \
-        --set "cb_bars.${pid}.icon" drawing=off \
-        --set "cb_bars.${pid}.bar" drawing=off \
-        --set "cb_bars.${pid}.label" drawing=off label="" >/dev/null 2>&1 || true
+read_state_providers() {
+    [[ -f "${STATE_FILE}" ]] || return 0
+    while IFS= read -r pid || [[ -n "${pid}" ]]; do
+        [[ -n "${pid}" ]] || continue
+        printf '%s\n' "${pid}"
+    done < "${STATE_FILE}"
 }
 
-hide_state_providers() {
-    [[ -f "${STATE_FILE}" ]] || return 0
-    while IFS= read -r old_pid; do
-        [[ -n "${old_pid}" ]] || continue
-        hide_provider "${old_pid}"
-    done < "${STATE_FILE}"
+provider_list_contains() {
+    local list="${1-}" pid="$2"
+    case $'\n'"${list}"$'\n' in
+        *$'\n'"${pid}"$'\n'*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+write_state_providers() {
+    local providers="${1-}" state_tmp
+    state_tmp=$(mktemp "${CACHE_DIR}/.providers.XXXXXX") || return 1
+    if [[ -n "${providers}" ]]; then
+        printf '%s\n' "${providers}" > "${state_tmp}"
+    else
+        : > "${state_tmp}"
+    fi
+    mv -f "${state_tmp}" "${STATE_FILE}"
+}
+
+remove_provider_items() {
+    local pid="$1"
+    sketchybar \
+        --remove "cb_bars.${pid}.icon" \
+        --remove "cb_bars.${pid}.bar" \
+        --remove "cb_bars.${pid}.label" >/dev/null 2>&1 || true
+}
+
+declare_provider_items() {
+    local pid="$1"
+    sketchybar --add item "cb_bars.${pid}.icon" left \
+               --set "cb_bars.${pid}.icon" \
+                   icon.drawing=off \
+                   label.drawing=off \
+                   background.image="cb_bars.${pid}.icon" \
+                   background.image.drawing=on \
+                   background.image.scale="${CB_BARS_SKETCHYBAR_ICON_SCALE}" \
+                   background.color=0x00000000 \
+                   background.height=0 \
+                   padding_left="${CB_BARS_SKETCHYBAR_ICON_PADDING_LEFT}" \
+                   padding_right=0 \
+                   width="${CB_BARS_SKETCHYBAR_ICON_WIDTH}" \
+                   click_script="${CLICK}" >/dev/null 2>&1 || true
+
+    sketchybar --add item "cb_bars.${pid}.bar" left \
+               --set "cb_bars.${pid}.bar" \
+                   icon.drawing=off \
+                   label.drawing=off \
+                   background.image="cb_bars.${pid}.bar" \
+                   background.image.drawing=on \
+                   background.image.scale=1.0 \
+                   background.color=0x00000000 \
+                   background.height=0 \
+                   padding_left=2 \
+                   padding_right=2 \
+                   width="${CB_BARS_SKETCHYBAR_BAR_WIDTH}" \
+                   click_script="${CLICK}" >/dev/null 2>&1 || true
+
+    sketchybar --add item "cb_bars.${pid}.label" left \
+               --set "cb_bars.${pid}.label" \
+                   icon.drawing=off \
+                   label.font.size=11 \
+                   label.padding_left=0 \
+                   label.padding_right=4 \
+                   background.color=0x00000000 \
+                   background.height=0 \
+                   click_script="${CLICK}" >/dev/null 2>&1 || true
+}
+
+recreate_bracket() {
+    local providers="${1-}" pid
+    local bracket_items=()
+    sketchybar --remove cb_bars_bracket >/dev/null 2>&1 || true
+
+    while IFS= read -r pid; do
+        [[ -n "${pid}" ]] || continue
+        bracket_items+=("cb_bars.${pid}.icon" "cb_bars.${pid}.bar" "cb_bars.${pid}.label")
+    done <<< "${providers}"
+
+    (( ${#bracket_items[@]} > 0 )) || return 0
+    sketchybar --add bracket cb_bars_bracket "${bracket_items[@]}" \
+               --set cb_bars_bracket \
+                   background.color="${CB_BARS_SKETCHYBAR_PILL_COLOR}" \
+                   background.corner_radius="${CB_BARS_SKETCHYBAR_PILL_RADIUS}" \
+                   background.height="${CB_BARS_SKETCHYBAR_PILL_HEIGHT}" >/dev/null 2>&1 || true
+}
+
+clear_declared_items() {
+    local declared pid
+    declared="$(read_state_providers)"
+    while IFS= read -r pid; do
+        [[ -n "${pid}" ]] || continue
+        remove_provider_items "${pid}"
+    done <<< "${declared}"
+    sketchybar --remove cb_bars_bracket >/dev/null 2>&1 || true
+    write_state_providers "" || cb_bars_log "failed to clear sketchybar provider state"
 }
 
 cb_bars_have jq || {
     cb_bars_log "jq required for sketchybar plugin"
-    hide_state_providers
+    clear_declared_items
     exit 0
 }
 cb_bars_have magick || {
     cb_bars_log "magick (ImageMagick 7+) required for sketchybar plugin"
-    hide_state_providers
+    clear_declared_items
     exit 0
 }
 
@@ -84,7 +174,8 @@ WARN_HEX="$(cb_bars_palette warn)"
 BAD_HEX="$(cb_bars_palette bad)"
 UNKNOWN_HEX="$(cb_bars_palette unknown)"
 TRACK_HEX="$(cb_bars_palette track)"
-TEXT_ARGB="$(argb_from_hex "$(cb_bars_palette text)")"
+TEXT_HEX="$(cb_bars_palette text)"
+TEXT_ARGB="$(argb_from_hex "${TEXT_HEX}")"
 ELAPSED_HEX="$(cb_bars_palette elapsed)"
 
 color_for_remaining() {
@@ -106,6 +197,41 @@ status_color_for_indicator() {
     esac
 }
 
+shell_quote() {
+    local raw="$1"
+    printf "'"
+    while [[ "${raw}" == *"'"* ]]; do
+        printf '%s' "${raw%%\'*}"
+        printf "'\\''"
+        raw="${raw#*\'}"
+    done
+    printf "%s'" "${raw}"
+}
+
+status_url_is_openable() {
+    case "${1:-}" in
+        http://*|https://*) return 0 ;;
+        *)                  return 1 ;;
+    esac
+}
+
+click_script_for_status() {
+    local status="${1:-none}" url="${2:-}"
+    case "${status}" in
+        minor|maintenance|major|critical)
+            if status_url_is_openable "${url}"; then
+                printf 'open %s' "$(shell_quote "${url}")"
+                return
+            fi
+            ;;
+    esac
+    printf '%s' "${CLICK}"
+}
+
+# Bump when icon rendering semantics change so stale cached PNGs are replaced
+# on the next plugin tick.
+ICON_CACHE_VERSION="2"
+
 # ── provider icon: lazily render SVG → PNG ───────────────────────────
 render_fallback_icon_png() {
     local pid="$1" tmp="$2"
@@ -119,14 +245,43 @@ render_fallback_icon_png() {
         "PNG32:${tmp}" >/dev/null 2>&1
 }
 
+recolor_icon_png() {
+    local src="$1" hex="$2" out="$3"
+    magick "${src}" -alpha extract \
+        -background "$(mhex "${hex}")" -alpha shape \
+        "PNG32:${out}" >/dev/null 2>&1
+}
+
+should_tint_dark_icon_png() {
+    local png="$1" stats r g b
+    stats=$(magick "${png}" txt:- 2>/dev/null | awk -F '[(), ]+' '
+        BEGIN { r = 0; g = 0; b = 0; n = 0 }
+        /^#/ { next }
+        ($6 + 0) <= 0 { next }
+        { r += $3; g += $4; b += $5; n++ }
+        END {
+            if (n == 0) exit 1
+            printf "%.6f %.6f %.6f\n", r / (255 * n), g / (255 * n), b / (255 * n)
+        }'
+    ) || return 1
+    read -r r g b <<< "${stats}"
+    awk -v r="${r}" -v g="${g}" -v b="${b}" 'BEGIN {
+        mean = (r + g + b) / 3;
+        min = r; max = r;
+        if (g < min) min = g; if (b < min) min = b;
+        if (g > max) max = g; if (b > max) max = b;
+        exit ! (mean < 0.15 && (max - min) < 0.03);
+    }'
+}
+
 
 provider_icon_png() {
     local pid="$1" status="${2:-none}"
-    local status_color="" suffix="" out
+    local status_color="" tint_color="" suffix="" out
     if status_color=$(status_color_for_indicator "${status}"); then
         suffix="-${status}"
     fi
-    out="${CACHE_DIR}/icon-${pid}${suffix}.png"
+    out="${CACHE_DIR}/icon-v${ICON_CACHE_VERSION}-${pid}${suffix}.png"
     [[ -s "${out}" ]] && { printf '%s\n' "${out}"; return 0; }
 
     # Per-process tmp files in the same directory so `mv` is atomic.
@@ -148,10 +303,14 @@ provider_icon_png() {
     fi
 
     if [[ -n "${status_color}" ]]; then
-        tmp=$(mktemp "${CACHE_DIR}/.icon-${pid}.status.XXXXXX") || { rm -f "${normal_tmp}"; return 1; }
-        if ! magick "${normal_tmp}" -alpha extract \
-                    -background "$(mhex "${status_color}")" -alpha shape \
-                    "PNG32:${tmp}" >/dev/null 2>&1; then
+        tint_color="${status_color}"
+    elif should_tint_dark_icon_png "${normal_tmp}"; then
+        tint_color="${TEXT_HEX}"
+    fi
+
+    if [[ -n "${tint_color}" ]]; then
+        tmp=$(mktemp "${CACHE_DIR}/.icon-${pid}.tint.XXXXXX") || { rm -f "${normal_tmp}"; return 1; }
+        if ! recolor_icon_png "${normal_tmp}" "${tint_color}" "${tmp}"; then
             rm -f "${tmp}"
             tmp="${normal_tmp}"
         else
@@ -305,9 +464,31 @@ elapsed_marker_x() {
     (( marker >= CB_BARS_PNG_BAR_W )) && marker=$((CB_BARS_PNG_BAR_W - 1))
     printf '%s\n' "${marker}"
 }
-# Providers absent from this filtered row set are hidden below, so stale
-# SketchyBar items do not keep showing old quota data.
 filtered=$(printf '%s' "${data}" | cb_bars_filter_renderable)
+desired_providers=$(printf '%s' "${filtered}" | jq -r '.[].provider')
+declared_providers="$(read_state_providers)"
+declared_item_providers="${declared_providers}"
+force_redeclare=0
+if [[ "${CB_BARS_SKETCHYBAR_FORCE_REDECLARE:-0}" == "1" ]]; then
+    force_redeclare=1
+    declared_item_providers=""
+fi
+
+if (( force_redeclare )) || [[ "${desired_providers}" != "${declared_providers}" ]]; then
+    while IFS= read -r pid; do
+        [[ -n "${pid}" ]] || continue
+        provider_list_contains "${desired_providers}" "${pid}" || remove_provider_items "${pid}"
+    done <<< "${declared_providers}"
+
+    while IFS= read -r pid; do
+        [[ -n "${pid}" ]] || continue
+        provider_list_contains "${declared_item_providers}" "${pid}" || declare_provider_items "${pid}"
+    done <<< "${desired_providers}"
+
+    recreate_bracket "${desired_providers}"
+    write_state_providers "${desired_providers}" || cb_bars_log "failed to update sketchybar provider state"
+fi
+
 rows=$(printf '%s' "${filtered}" | jq -r '
     def pct(x): if x == null then 0 else ([0, ([100, (x|tonumber|floor)] | min)] | max) end;
     .[] | [
@@ -320,12 +501,11 @@ rows=$(printf '%s' "${filtered}" | jq -r '
         (if .usage.tertiary  then (100 - pct(.usage.tertiary.usedPercent))  else "" end),
         (.usage.tertiary.resetsAt // .usage.tertiary.resetDescription // ""),
         (.usage.tertiary.windowMinutes // ""),
-        (.status.indicator // "none")
+        (.status.indicator // "none"),
+        (.status.url // "")
     ] | map(tostring) | join("\u001f")')
-current_providers=$'\n'
 
-
-while IFS=$'\x1f' read -r pid rem_p p_reset rem_s s_reset s_window rem_t t_reset t_window status; do
+while IFS=$'\x1f' read -r pid rem_p p_reset rem_s s_reset s_window rem_t t_reset t_window status status_url; do
     [[ -n "${pid}" ]] || continue
 
     icon=$(provider_icon_png "${pid}" "${status}" || true)
@@ -338,18 +518,17 @@ while IFS=$'\x1f' read -r pid rem_p p_reset rem_s s_reset s_window rem_t t_reset
         minutes=$(cb_bars_minutes_until "${p_reset}" || true)
     fi
     label=""; color=""
+    icon_click=$(click_script_for_status "${status}" "${status_url}")
     { IFS= read -r label; IFS= read -r color; } < <(label_for_minutes "${minutes}" "${rem_p}" "${p_reset}") || true
     [[ -n "${color}" ]] || color="${TEXT_ARGB}"
-
-    current_providers+="${pid}"$'\n'
 
     args=(
         --set "cb_bars.${pid}.label" drawing=on label="${label}" label.color="${color}" background.color=0x00000000 background.height=0
     )
     if [[ -n "${icon}" && -s "${icon}" ]]; then
-        args+=( --set "cb_bars.${pid}.icon" drawing=on background.image="${icon}" background.image.drawing=on background.image.scale="${CB_BARS_SKETCHYBAR_ICON_SCALE}" background.color=0x00000000 background.height=0 padding_left="${CB_BARS_SKETCHYBAR_ICON_PADDING_LEFT}" padding_right=0 width="${CB_BARS_SKETCHYBAR_ICON_WIDTH}" )
+        args+=( --set "cb_bars.${pid}.icon" drawing=on background.image="${icon}" background.image.drawing=on background.image.scale="${CB_BARS_SKETCHYBAR_ICON_SCALE}" background.color=0x00000000 background.height=0 padding_left="${CB_BARS_SKETCHYBAR_ICON_PADDING_LEFT}" padding_right=0 width="${CB_BARS_SKETCHYBAR_ICON_WIDTH}" click_script="${icon_click}" )
     else
-        args+=( --set "cb_bars.${pid}.icon" drawing=off )
+        args+=( --set "cb_bars.${pid}.icon" drawing=off click_script="${CLICK}" )
     fi
     if [[ -n "${bar}" && -s "${bar}" ]]; then
         args+=( --set "cb_bars.${pid}.bar" drawing=on background.image="${bar}" background.image.drawing=on background.image.scale=1.0 background.color=0x00000000 background.height=0 padding_left=2 padding_right=2 width="${CB_BARS_SKETCHYBAR_BAR_WIDTH}" )
@@ -361,17 +540,3 @@ while IFS=$'\x1f' read -r pid rem_p p_reset rem_s s_reset s_window rem_t t_reset
         sketchybar "${args[@]}" >/dev/null 2>&1 || true
     fi
 done <<< "${rows}"
-
-if [[ -f "${STATE_FILE}" ]]; then
-    while IFS= read -r old_pid; do
-        [[ -n "${old_pid}" ]] || continue
-        case "${current_providers}" in
-            *$'\n'"${old_pid}"$'\n'*) ;;
-            *) hide_provider "${old_pid}" ;;
-        esac
-    done < "${STATE_FILE}"
-fi
-
-state_tmp=$(mktemp "${CACHE_DIR}/.providers.XXXXXX") || exit 0
-printf '%s' "${current_providers}" | sed '/^$/d' > "${state_tmp}"
-mv -f "${state_tmp}" "${STATE_FILE}"
