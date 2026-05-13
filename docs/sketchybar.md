@@ -5,15 +5,20 @@
 Per provider in the filtered render set (`codexbar usage --format json`
 after `SHOWY_BAR_PROVIDERS` / `SHOWY_BAR_PROVIDERS_EXCLUDE` are applied):
 
-- `showy_bar.<provider>.icon`  — provider PNG (rendered from CodexBar's SVG)
-- `showy_bar.<provider>.bar`   — multi-segment usage bar PNG
+- `showy_bar.<provider>.icon` — provider icon (`sketchybar-app-font` when
+  mapped, CodexBar SVG/PNG fallback otherwise)
+- `showy_bar.<provider>.primary` / `.secondary` / `.tertiary` — native slider
+  usage rows
+- `showy_bar.<provider>.secondary_marker` / `.tertiary_marker` — pacing
+  markers
+- `showy_bar.<provider>.slot` — transparent click/spacing item
 - `showy_bar.<provider>.label` — countdown label
 
 Plus:
 
 - `showy_bar.trigger`     — invisible item that runs the plugin every
   `SHOWY_BAR_SKETCHYBAR_UPDATE_FREQ` seconds.
-- `showy_bar_bracket`     — pill background grouping the triple.
+- `showy_bar_bracket`     — pill background grouping the provider items.
 
 Provider adds/removals reconcile against that filtered set on the next plugin
 tick; no `sketchybar --reload` is required after the initial install.
@@ -60,7 +65,7 @@ forwards `PILL_RADIUS` / `PILL_HEIGHT` into those envs when the explicit
 
 ## Click action
 
-Clicking the usage bar, label, or a non-degraded provider icon runs
+Clicking the usage rows, label, or a non-degraded provider icon runs
 `SHOWY_BAR_SKETCHYBAR_CLICK` (default: `open -b com.steipete.codexbar`),
 which brings the CodexBar app forward. When a provider status is degraded
 (`minor`, `maintenance`, `major`, or `critical`) and CodexBar supplies an
@@ -79,7 +84,7 @@ Examples:
 - exclude only → everything except those providers
 - include + exclude → the include set minus the exclude set
 
-## PNG bar layout
+## Native bar layout
 
 ```
 +-------------------------------- 80 px ---------------------------+
@@ -91,8 +96,8 @@ Examples:
 +------------------------------------------------------------------+
 ```
 
-When a provider has only primary + secondary (most common), the image is
-18 px tall; with tertiary it's 22 px.
+Rows are native SketchyBar sliders using `SHOWY_BAR_PNG_BAR_W` for width.
+Tertiary is hidden when the provider does not expose that window.
 
 ## Customizing colors
 
@@ -112,11 +117,10 @@ without hand-editing the config file.
 
 ## Cache
 
-PNGs go to `${SHOWY_BAR_SKETCHYBAR_IMAGE_CACHE}` (default
-`~/.cache/showy-bar/sketchybar`). They are byte-compared on each
-refresh; only changed images are written.
+Only SVG fallback icons are PNG-cached in `${SHOWY_BAR_SKETCHYBAR_IMAGE_CACHE}`
+(default `~/.cache/showy-bar/sketchybar`). Native bars and mapped font icons
+are not rasterized.
 
 ## Caveats
 
-- The plugin does not dim or annotate when the cache is stale. Zellij and
-  tmux do; SketchyBar relies on CodexBar's own menu for incident hints.
+- The plugin does not dim when the cache is stale. Zellij and tmux do.

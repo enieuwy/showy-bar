@@ -214,6 +214,32 @@ run_sketchybar_plugin() {
         "${REPO_ROOT}/sketchybar/plugins/showy_bar.sh"
 }
 
+run_sketchybar_plugin_without_magick() {
+    local fixture="$1" cache="$2" log="$3"
+    shift 3
+    local fixture_file no_magick_path bash_path jq_path
+    fixture_file=$(fixture_path "${fixture}")
+    no_magick_path="${TMP}/no-magick-bin"
+    mkdir -p "${no_magick_path}"
+    bash_path=$(command -v bash)
+    [[ -x /opt/homebrew/bin/bash ]] && bash_path=/opt/homebrew/bin/bash
+    jq_path=$(command -v jq)
+    ln -sf "${bash_path}" "${no_magick_path}/bash"
+    ln -sf "${jq_path}" "${no_magick_path}/jq"
+    ln -sf "${stub_dir}/codexbar" "${no_magick_path}/codexbar"
+    ln -sf "${stub_dir}/sketchybar" "${no_magick_path}/sketchybar"
+    env \
+        PATH="${no_magick_path}:/usr/bin:/bin:/usr/sbin:/sbin" \
+        SHOWY_BAR_NO_CONFIG=1 \
+        SHOWY_BAR_CACHE_DIR="${cache}" \
+        SHOWY_BAR_SKETCHYBAR_IMAGE_CACHE="${cache}/sb" \
+        SHOWY_BAR_TEST_FIXTURE="${fixture_file}" \
+        SHOWY_BAR_TEST_LOG="${log}" \
+        "$@" \
+        SHOWY_BAR_TEST_STATE_DIR="${cache}/sb-state" \
+        "${REPO_ROOT}/sketchybar/plugins/showy_bar.sh"
+}
+
 seed_sketchybar_state() {
     local cache="$1"
     shift
@@ -231,7 +257,12 @@ seed_sketchybar_live_items() {
     local pid
     for pid in "$@"; do
         : > "${cache}/sb-state/showy_bar.${pid}.icon"
-        : > "${cache}/sb-state/showy_bar.${pid}.bar"
+        : > "${cache}/sb-state/showy_bar.${pid}.primary"
+        : > "${cache}/sb-state/showy_bar.${pid}.secondary"
+        : > "${cache}/sb-state/showy_bar.${pid}.tertiary"
+        : > "${cache}/sb-state/showy_bar.${pid}.secondary_marker"
+        : > "${cache}/sb-state/showy_bar.${pid}.tertiary_marker"
+        : > "${cache}/sb-state/showy_bar.${pid}.slot"
         : > "${cache}/sb-state/showy_bar.${pid}.label"
     done
     if (($# > 0)); then
@@ -585,9 +616,12 @@ run_sketchybar_items codexbar-mixed.json "${cache}" "${log}"
 item_log="$(< "${log}")"
 assert_contains "bootstrap declares trigger item" "showy_bar.trigger drawing=off updates=on" "${item_log}"
 assert_contains "bootstrap synchronously adds provider items" "--add item showy_bar.claude.icon left" "${item_log}"
+assert_contains "bootstrap adds native primary slider" "--add slider showy_bar.claude.primary left 80" "${item_log}"
+assert_contains "bootstrap adds native marker overlay" "--add slider showy_bar.claude.secondary_marker left 80" "${item_log}"
 assert_contains "bootstrap recreates bracket immediately" "--add bracket showy_bar_bracket" "${item_log}"
 assert_contains "bootstrap preserves icon width" "width=22" "${item_log}"
-assert_contains "bootstrap preserves bar width" "width=84" "${item_log}"
+assert_contains "bootstrap preserves native bar slot width" "showy_bar.claude.slot icon.drawing=off" "${item_log}"
+assert_contains "bootstrap preserves native bar width" "width=84" "${item_log}"
 
 cache=$(mk_cache)
 seed_sketchybar_state "${cache}" claude codex gemini
@@ -601,7 +635,9 @@ seed_sketchybar_state "${cache}" claude codex gemini
 log="${TMP}/sb-items-empty.log"
 run_sketchybar_items codexbar-mixed.json "${cache}" "${log}" SHOWY_BAR_PROVIDERS_EXCLUDE='claude,codex,gemini'
 item_log="$(< "${log}")"
-assert_contains "bootstrap removes stale providers when desired set is empty" "--remove showy_bar.gemini.icon --remove showy_bar.gemini.bar --remove showy_bar.gemini.label" "${item_log}"
+assert_contains "bootstrap removes stale legacy bar item when desired set is empty" "--remove showy_bar.gemini.bar" "${item_log}"
+assert_contains "bootstrap removes stale native provider items when desired set is empty" "--remove showy_bar.gemini.primary --remove showy_bar.gemini.secondary --remove showy_bar.gemini.tertiary" "${item_log}"
+assert_contains "bootstrap removes stale native marker items when desired set is empty" "--remove showy_bar.gemini.secondary_marker --remove showy_bar.gemini.tertiary_marker --remove showy_bar.gemini.slot --remove showy_bar.gemini.label" "${item_log}"
 assert_contains "bootstrap removes stale bracket when desired set is empty" "--remove showy_bar_bracket" "${item_log}"
 
 cache=$(mk_cache)
@@ -622,18 +658,12 @@ assert_contains "bootstrap exports non-exported click override" "click_script=cu
 
 # ── sketchybar plugin (without sketchybar daemon) ───────────────────────
 
-printf '\nsketchybar plugin (PNG generation)\n'
+printf '\nsketchybar plugin (native sliders)\n'
 
 cache=$(mk_cache)
 log="${TMP}/sb.log"
 run_sketchybar_plugin codexbar-mixed.json "${cache}" "${log}"
 
-if [[ -s "${cache}/sb/bar-claude.png" ]]; then ok "claude bar PNG generated"
-else fail "claude bar PNG generated"; fi
-if [[ -s "${cache}/sb/bar-codex.png" ]]; then ok "codex bar PNG generated"
-else fail "codex bar PNG generated"; fi
-if [[ -s "${cache}/sb/bar-gemini.png" ]]; then ok "gemini tertiary bar PNG generated"
-else fail "gemini tertiary bar PNG generated"; fi
 if [[ -s "${log}" ]]; then ok "sketchybar received --set commands"
 else fail "sketchybar received --set commands"; fi
 if grep -q 'label.color=0xff' "${log}" 2>/dev/null; then
@@ -643,58 +673,99 @@ else
 fi
 assert_contains "plugin uses countdown label color" "label.color=0xff7b8496" "$(< "${log}")"
 if grep -q 'width=84' "${log}" 2>/dev/null; then
-    ok "plugin repairs bar item width"
+    ok "plugin repairs native bar slot width"
 else
-    fail "plugin repairs bar item width"
+    fail "plugin repairs native bar slot width"
 fi
-expected_role_rgb=$(hex_to_rgb_csv 14683a)
-claude_secondary_pixel=$(magick "${cache}/sb/bar-claude.png" -format '%[pixel:p{10,11}]' info: 2>/dev/null || true)
-assert_contains "plugin uses derived secondary row color" "${expected_role_rgb}" "${claude_secondary_pixel}"
-gemini_tertiary_pixel=$(magick "${cache}/sb/bar-gemini.png" -format '%[pixel:p{10,18}]' info: 2>/dev/null || true)
-assert_contains "plugin uses derived tertiary row color" "${expected_role_rgb}" "${gemini_tertiary_pixel}"
-marker_pixel=$(magick "${cache}/sb/bar-claude.png" -format '%[pixel:p{79,11}]' info: 2>/dev/null || true)
-if [[ "${marker_pixel}" == *"190,149,255"* ]]; then
-    ok "plugin draws elapsed marker line"
+plugin_log="$(< "${log}")"
+assert_contains "plugin updates native primary row percentage" "--set showy_bar.claude.primary drawing=on slider.percentage=83" "${plugin_log}"
+assert_contains "plugin updates native secondary row percentage" "--set showy_bar.claude.secondary drawing=on slider.percentage=81" "${plugin_log}"
+assert_contains "plugin hides missing tertiary row" "--set showy_bar.claude.tertiary drawing=off" "${plugin_log}"
+assert_contains "plugin updates native tertiary row when present" "--set showy_bar.gemini.tertiary drawing=on slider.percentage=100" "${plugin_log}"
+assert_contains "plugin uses derived secondary row color" "showy_bar.claude.secondary drawing=on slider.percentage=81 slider.highlight_color=0xff14683a" "${plugin_log}"
+assert_contains "plugin uses derived tertiary row color" "showy_bar.gemini.tertiary drawing=on slider.percentage=100 slider.highlight_color=0xff14683a" "${plugin_log}"
+assert_contains "plugin uses native track color" "slider.background.color=0xff3a3a4a" "${plugin_log}"
+assert_contains "plugin draws elapsed marker overlay" "--set showy_bar.claude.secondary_marker drawing=on slider.percentage=100" "${plugin_log}"
+assert_contains "plugin uses elapsed marker color" "slider.knob.background.color=0xffbe95ff" "${plugin_log}"
+assert_contains "plugin uses two-row primary y offset" "showy_bar.claude.primary drawing=on slider.percentage=83" "${plugin_log}"
+assert_contains "plugin positions two-row primary above center" "y_offset=4 click_script=command -v sketchybar" "${plugin_log}"
+assert_contains "plugin positions two-row secondary below center" "showy_bar.claude.secondary drawing=on slider.percentage=81" "${plugin_log}"
+assert_contains "plugin uses three-row tertiary y offset" "showy_bar.gemini.tertiary drawing=on slider.percentage=100" "${plugin_log}"
+assert_contains "plugin positions tertiary below three-row stack" "y_offset=-7 click_script=command -v sketchybar" "${plugin_log}"
+assert_contains "plugin click reset keeps slider rows stable" "sketchybar --set 'showy_bar.claude.primary' slider.percentage=83" "${plugin_log}"
+assert_not_contains "plugin no longer writes provider bar PNGs" "bar-claude.png" "${plugin_log}"
+
+cache=$(mk_cache)
+log="${TMP}/sb-no-magick.log"
+run_sketchybar_plugin_without_magick codexbar-mixed.json "${cache}" "${log}"
+plugin_log="$(< "${log}")"
+assert_contains "plugin updates native bars without magick" "--set showy_bar.claude.primary drawing=on slider.percentage=83" "${plugin_log}"
+assert_contains "plugin hides icons when magick is unavailable" "--set showy_bar.claude.icon drawing=off click_script=open -b com.steipete.codexbar" "${plugin_log}"
+if [[ ! -e "${cache}/sb/bar-claude.png" ]]; then
+    ok "plugin does not rasterize bars without magick"
 else
-    fail "plugin draws elapsed marker line" "pixel=${marker_pixel}"
-fi
-gap_pixels=$(magick "${cache}/sb/bar-gemini.png" -format '%[pixel:p{10,7}] %[pixel:p{10,14}]' info: 2>/dev/null || true)
-if [[ "${gap_pixels}" == *"srgba(0,0,0,0)"*"srgba(0,0,0,0)"* ]]; then
-    ok "plugin leaves 1px gaps between tertiary rows"
-else
-    fail "plugin leaves 1px gaps between tertiary rows" "pixels=${gap_pixels}"
+    fail "plugin does not rasterize bars without magick"
 fi
 
 cache=$(mk_cache)
-log="${TMP}/sb-status.log"
-run_sketchybar_plugin codexbar-status-major.json "${cache}" "${log}"
-if [[ -s "${cache}/sb/icon-v2-codex-major.png" ]]; then
-    ok "plugin generates status-tinted icon"
-else
-    fail "plugin generates status-tinted icon"
-fi
-status_log="$(< "${log}")"
-assert_contains "plugin uses status-tinted icon" "icon-v2-codex-major.png" "${status_log}"
-assert_contains "plugin routes degraded status icon to provider status page" "click_script=open 'https://status.openai.com/'" "${status_log}"
+log="${TMP}/sb-font-icons-no-magick.log"
+run_sketchybar_plugin_without_magick codexbar-mixed.json "${cache}" "${log}" SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE=font
+plugin_log="$(< "${log}")"
+assert_contains "plugin can draw provider icons from app font without magick" "--set showy_bar.claude.icon drawing=on icon.drawing=on icon=:claude: icon.font=sketchybar-app-font:Regular:14.0" "${plugin_log}"
+assert_contains "plugin maps codex provider to app font icon" "showy_bar.codex.icon drawing=on icon.drawing=on icon=:codex:" "${plugin_log}"
+assert_contains "plugin maps gemini provider to app font icon" "showy_bar.gemini.icon drawing=on icon.drawing=on icon=:gemini:" "${plugin_log}"
+assert_contains "plugin widens font icon item to make a real native bar gap" "showy_bar.claude.icon drawing=on icon.drawing=on icon=:claude: icon.font=sketchybar-app-font:Regular:14.0 icon.color=0xfff2f4f8 icon.align=center icon.width=22 icon.padding_left=0 icon.padding_right=0 label.drawing=off background.image.drawing=off background.color=0x00000000 background.height=0 padding_left=5 padding_right=0 width=24" "${plugin_log}"
+assert_not_contains "font icon mode avoids provider PNG cache paths" "icon-v2-" "${plugin_log}"
 
-opencode_fixture="${TMP}/codexbar-opencode.json"
-printf '%s\n' '[{"provider":"opencode","usage":{"primary":{"usedPercent":12,"windowMinutes":300,"resetsAt":"2099-01-01T05:40:00Z"}}}]' > "${opencode_fixture}"
-resource_dir="${TMP}/opencode-resources"
-mkdir -p "${resource_dir}"
-printf '%s\n' '<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M80 88H20V12H80V88ZM35 27H65V72H35V27Z" fill="#211E1E"/></svg>' > "${resource_dir}/ProviderIcon-opencode.svg"
-cache=$(mk_cache)
-log="${TMP}/sb-opencode.log"
-run_sketchybar_plugin "${opencode_fixture}" "${cache}" "${log}" SHOWY_BAR_CODEXBAR_RESOURCES="${resource_dir}"
-if [[ -s "${cache}/sb/icon-v2-opencode.png" ]]; then
-    ok "plugin generates tinted dark icon"
+if command -v magick >/dev/null 2>&1; then
+    cache=$(mk_cache)
+    log="${TMP}/sb-status.log"
+    run_sketchybar_plugin codexbar-status-major.json "${cache}" "${log}"
+    if [[ -s "${cache}/sb/icon-v2-codex-major.png" ]]; then
+        ok "plugin generates status-tinted icon"
+    else
+        fail "plugin generates status-tinted icon"
+    fi
+    status_log="$(< "${log}")"
+    assert_contains "plugin uses status-tinted icon" "icon-v2-codex-major.png" "${status_log}"
+    assert_contains "plugin routes degraded status icon to provider status page" "click_script=open 'https://status.openai.com/'" "${status_log}"
+
+    cache=$(mk_cache)
+    log="${TMP}/sb-font-status.log"
+    run_sketchybar_plugin codexbar-status-major.json "${cache}" "${log}" SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE=font
+    font_status_log="$(< "${log}")"
+    assert_contains "font icon mode colors degraded providers like PNG tinting" "showy_bar.codex.icon drawing=on icon.drawing=on icon=:codex: icon.font=sketchybar-app-font:Regular:14.0 icon.color=0xffee5396" "${font_status_log}"
+    assert_contains "font icon mode preserves degraded provider status click" "click_script=open 'https://status.openai.com/'" "${font_status_log}"
+    assert_not_contains "font icon mode skips status PNG for mapped provider" "icon-v2-codex-major.png" "${font_status_log}"
+
+    opencode_fixture="${TMP}/codexbar-opencode.json"
+    printf '%s\n' '[{"provider":"opencode","usage":{"primary":{"usedPercent":12,"windowMinutes":300,"resetsAt":"2099-01-01T05:40:00Z"}}}]' > "${opencode_fixture}"
+    resource_dir="${TMP}/opencode-resources"
+    mkdir -p "${resource_dir}"
+    printf '%s\n' '<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M80 88H20V12H80V88ZM35 27H65V72H35V27Z" fill="#211E1E"/></svg>' > "${resource_dir}/ProviderIcon-opencode.svg"
+    cache=$(mk_cache)
+    log="${TMP}/sb-opencode.log"
+    run_sketchybar_plugin "${opencode_fixture}" "${cache}" "${log}" SHOWY_BAR_CODEXBAR_RESOURCES="${resource_dir}"
+    if [[ -s "${cache}/sb/icon-v2-opencode.png" ]]; then
+        ok "plugin generates tinted dark icon"
+    else
+        fail "plugin generates tinted dark icon"
+    fi
+    opencode_mean=$(magick "${cache}/sb/icon-v2-opencode.png" -background black -alpha remove -format '%[fx:(mean.r+mean.g+mean.b)/3]' info: 2>/dev/null || true)
+    if awk -v mean="${opencode_mean:-0}" 'BEGIN { exit !(mean > 0.25) }'; then
+        ok "plugin tints near-black monochrome icons to text color"
+    else
+        fail "plugin tints near-black monochrome icons to text color" "mean=${opencode_mean}"
+    fi
+
+    cache=$(mk_cache)
+    log="${TMP}/sb-opencode-font-fallback.log"
+    run_sketchybar_plugin "${opencode_fixture}" "${cache}" "${log}" SHOWY_BAR_CODEXBAR_RESOURCES="${resource_dir}" SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE=font
+    font_fallback_log="$(< "${log}")"
+    assert_contains "font icon mode falls back to SVG for unmapped opencode" "showy_bar.opencode.icon drawing=on icon.drawing=off label.drawing=off background.image=${cache}/sb/icon-v2-opencode.png" "${font_fallback_log}"
+    assert_not_contains "font icon mode avoids generic code glyph for opencode" "showy_bar.opencode.icon drawing=on icon.drawing=on icon=:code:" "${font_fallback_log}"
 else
-    fail "plugin generates tinted dark icon"
-fi
-opencode_mean=$(magick "${cache}/sb/icon-v2-opencode.png" -background black -alpha remove -format '%[fx:(mean.r+mean.g+mean.b)/3]' info: 2>/dev/null || true)
-if awk -v mean="${opencode_mean:-0}" 'BEGIN { exit !(mean > 0.25) }'; then
-    ok "plugin tints near-black monochrome icons to text color"
-else
-    fail "plugin tints near-black monochrome icons to text color" "mean=${opencode_mean}"
+    ok "plugin skips ImageMagick icon tests when magick is unavailable"
 fi
 
 cache=$(mk_cache)
@@ -719,7 +790,7 @@ run_sketchybar_plugin codexbar-mixed.json "${cache}" "${log}"
 plugin_log="$(< "${log}")"
 assert_contains "plugin adds newly visible provider" "--add item showy_bar.gemini.label left" "${plugin_log}"
 assert_not_contains "plugin does not re-add declared providers" "--add item showy_bar.codex.label left" "${plugin_log}"
-assert_contains "plugin rebuilds bracket with added provider" "showy_bar.gemini.icon showy_bar.gemini.bar showy_bar.gemini.label --set showy_bar_bracket" "${plugin_log}"
+assert_contains "plugin rebuilds bracket with added native provider" "showy_bar.gemini.icon showy_bar.gemini.primary showy_bar.gemini.secondary showy_bar.gemini.tertiary showy_bar.gemini.secondary_marker showy_bar.gemini.tertiary_marker showy_bar.gemini.slot showy_bar.gemini.label --set showy_bar_bracket" "${plugin_log}"
 assert_contains "plugin triggers provider-change event" "--trigger showy_bar_provider_change SHOWY_BAR_PROVIDER_COUNT=3 SHOWY_BAR_PROVIDERS=claude,codex,gemini" "${plugin_log}"
 
 cache=$(mk_cache)
@@ -737,7 +808,9 @@ seed_sketchybar_state "${cache}" claude codex gemini
 log="${TMP}/sb-remove.log"
 run_sketchybar_plugin "${drop_fixture}" "${cache}" "${log}"
 plugin_log="$(< "${log}")"
-assert_contains "plugin removes dropped provider" "--remove showy_bar.gemini.icon --remove showy_bar.gemini.bar --remove showy_bar.gemini.label" "${plugin_log}"
+assert_contains "plugin removes dropped provider legacy bar" "--remove showy_bar.gemini.icon --remove showy_bar.gemini.bar" "${plugin_log}"
+assert_contains "plugin removes dropped provider native rows" "--remove showy_bar.gemini.primary --remove showy_bar.gemini.secondary --remove showy_bar.gemini.tertiary" "${plugin_log}"
+assert_contains "plugin removes dropped provider native markers" "--remove showy_bar.gemini.secondary_marker --remove showy_bar.gemini.tertiary_marker --remove showy_bar.gemini.slot --remove showy_bar.gemini.label" "${plugin_log}"
 
 cache=$(mk_cache)
 seed_sketchybar_state "${cache}" claude codex gemini

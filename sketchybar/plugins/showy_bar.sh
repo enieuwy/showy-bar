@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# showy-bar — SketchyBar plugin: render per-provider icon + bar PNGs
-# and update each provider's items.
+# showy-bar — SketchyBar plugin: render per-provider icon + native usage
+# slider rows, and update each provider's items.
 #
 # Invoked by the showy_bar.trigger item every SHOWY_BAR_SKETCHYBAR_UPDATE_FREQ
-# seconds. Reads the shared codexbar JSON cache, generates a small PNG
-# strip per provider (track + primary + secondary [+ tertiary]), and
-# writes it to the user's image cache. SketchyBar then reads the PNG by
-# absolute path.
+# seconds. Reads the shared codexbar JSON cache, lazily caches provider icons,
+# and updates SketchyBar-native slider rows for each usage window.
 
+set +e
 set -uo pipefail
 
 # When this script is symlinked into the user's plugins dir, follow the
@@ -73,17 +72,54 @@ remove_provider_items() {
     sketchybar \
         --remove "showy_bar.${pid}.icon" \
         --remove "showy_bar.${pid}.bar" \
+        --remove "showy_bar.${pid}.primary" \
+        --remove "showy_bar.${pid}.secondary" \
+        --remove "showy_bar.${pid}.tertiary" \
+        --remove "showy_bar.${pid}.secondary_marker" \
+        --remove "showy_bar.${pid}.tertiary_marker" \
+        --remove "showy_bar.${pid}.slot" \
         --remove "showy_bar.${pid}.label" >/dev/null 2>&1 || true
+}
+
+declare_marker_item() {
+    local pid="$1" marker_role="$2" name
+    name="showy_bar.${pid}.${marker_role}_marker"
+    sketchybar --add slider "${name}" left "${SHOWY_BAR_PNG_BAR_W}" \
+               --set "${name}" \
+                   drawing=off \
+                   slider.percentage=0 \
+                   slider.highlight_color=0x00000000 \
+                   slider.background.color=0x00000000 \
+                   slider.background.height="${NATIVE_ROW_HEIGHT}" \
+                   slider.background.corner_radius=0 \
+                   slider.knob.drawing=on \
+                   slider.knob.color=0x00000000 \
+                   slider.knob.width=1 \
+                   slider.knob.padding_left=0 \
+                   slider.knob.padding_right=0 \
+                   slider.knob.background.drawing=on \
+                   slider.knob.background.color="${ELAPSED_ARGB}" \
+                   slider.knob.background.height="${NATIVE_ROW_HEIGHT}" \
+                   slider.knob.background.corner_radius=0 \
+                   icon.drawing=off \
+                   label.drawing=off \
+                   background.color=0x00000000 \
+                   background.height=0 \
+                   padding_left=0 \
+                   padding_right=0 \
+                   width=0 \
+                   click_script="${CLICK}" >/dev/null 2>&1 || true
 }
 
 declare_provider_items() {
     local pid="$1"
+    remove_provider_items "${pid}"
+
     sketchybar --add item "showy_bar.${pid}.icon" left \
                --set "showy_bar.${pid}.icon" \
                    icon.drawing=off \
                    label.drawing=off \
-                   background.image="showy_bar.${pid}.icon" \
-                   background.image.drawing=on \
+                   background.image.drawing=off \
                    background.image.scale="${SHOWY_BAR_SKETCHYBAR_ICON_SCALE}" \
                    background.color=0x00000000 \
                    background.height=0 \
@@ -92,17 +128,69 @@ declare_provider_items() {
                    width="${SHOWY_BAR_SKETCHYBAR_ICON_WIDTH}" \
                    click_script="${CLICK}" >/dev/null 2>&1 || true
 
-    sketchybar --add item "showy_bar.${pid}.bar" left \
-               --set "showy_bar.${pid}.bar" \
+    sketchybar --add slider "showy_bar.${pid}.primary" left "${SHOWY_BAR_PNG_BAR_W}" \
+               --set "showy_bar.${pid}.primary" \
+                   slider.percentage=0 \
+                   slider.highlight_color=0x00000000 \
+                   slider.background.color="${TRACK_ARGB}" \
+                   slider.background.height="${NATIVE_ROW_HEIGHT}" \
+                   slider.background.corner_radius="${NATIVE_ROW_RADIUS}" \
+                   slider.knob.drawing=off \
                    icon.drawing=off \
                    label.drawing=off \
-                   background.image="showy_bar.${pid}.bar" \
-                   background.image.drawing=on \
-                   background.image.scale=1.0 \
                    background.color=0x00000000 \
                    background.height=0 \
-                   padding_left=2 \
-                   padding_right=2 \
+                   padding_left=0 \
+                   padding_right=0 \
+                   width=0 \
+                   click_script="${CLICK}" >/dev/null 2>&1 || true
+
+    sketchybar --add slider "showy_bar.${pid}.secondary" left "${SHOWY_BAR_PNG_BAR_W}" \
+               --set "showy_bar.${pid}.secondary" \
+                   slider.percentage=0 \
+                   slider.highlight_color=0x00000000 \
+                   slider.background.color="${TRACK_ARGB}" \
+                   slider.background.height="${NATIVE_ROW_HEIGHT}" \
+                   slider.background.corner_radius="${NATIVE_ROW_RADIUS}" \
+                   slider.knob.drawing=off \
+                   icon.drawing=off \
+                   label.drawing=off \
+                   background.color=0x00000000 \
+                   background.height=0 \
+                   padding_left=0 \
+                   padding_right=0 \
+                   width=0 \
+                   click_script="${CLICK}" >/dev/null 2>&1 || true
+
+    sketchybar --add slider "showy_bar.${pid}.tertiary" left "${SHOWY_BAR_PNG_BAR_W}" \
+               --set "showy_bar.${pid}.tertiary" \
+                   drawing=off \
+                   slider.percentage=0 \
+                   slider.highlight_color=0x00000000 \
+                   slider.background.color="${TRACK_ARGB}" \
+                   slider.background.height="${NATIVE_ROW_HEIGHT}" \
+                   slider.background.corner_radius="${NATIVE_ROW_RADIUS}" \
+                   slider.knob.drawing=off \
+                   icon.drawing=off \
+                   label.drawing=off \
+                   background.color=0x00000000 \
+                   background.height=0 \
+                   padding_left=0 \
+                   padding_right=0 \
+                   width=0 \
+                   click_script="${CLICK}" >/dev/null 2>&1 || true
+
+    declare_marker_item "${pid}" secondary
+    declare_marker_item "${pid}" tertiary
+
+    sketchybar --add item "showy_bar.${pid}.slot" left \
+               --set "showy_bar.${pid}.slot" \
+                   icon.drawing=off \
+                   label.drawing=off \
+                   background.color=0x00000000 \
+                   background.height=0 \
+                   padding_left=0 \
+                   padding_right=0 \
                    width="${SHOWY_BAR_SKETCHYBAR_BAR_WIDTH}" \
                    click_script="${CLICK}" >/dev/null 2>&1 || true
 
@@ -123,7 +211,12 @@ sketchybar_item_exists() {
 provider_items_declared() {
     local pid="$1"
     sketchybar_item_exists "showy_bar.${pid}.icon" \
-        && sketchybar_item_exists "showy_bar.${pid}.bar" \
+        && sketchybar_item_exists "showy_bar.${pid}.primary" \
+        && sketchybar_item_exists "showy_bar.${pid}.secondary" \
+        && sketchybar_item_exists "showy_bar.${pid}.tertiary" \
+        && sketchybar_item_exists "showy_bar.${pid}.secondary_marker" \
+        && sketchybar_item_exists "showy_bar.${pid}.tertiary_marker" \
+        && sketchybar_item_exists "showy_bar.${pid}.slot" \
         && sketchybar_item_exists "showy_bar.${pid}.label"
 }
 
@@ -144,7 +237,16 @@ recreate_bracket() {
 
     while IFS= read -r pid; do
         [[ -n "${pid}" ]] || continue
-        bracket_items+=("showy_bar.${pid}.icon" "showy_bar.${pid}.bar" "showy_bar.${pid}.label")
+        bracket_items+=(
+            "showy_bar.${pid}.icon"
+            "showy_bar.${pid}.primary"
+            "showy_bar.${pid}.secondary"
+            "showy_bar.${pid}.tertiary"
+            "showy_bar.${pid}.secondary_marker"
+            "showy_bar.${pid}.tertiary_marker"
+            "showy_bar.${pid}.slot"
+            "showy_bar.${pid}.label"
+        )
     done <<< "${providers}"
 
     (( ${#bracket_items[@]} > 0 )) || return 0
@@ -189,15 +291,14 @@ showy_bar_have jq || {
     clear_declared_items
     exit 0
 }
-showy_bar_have magick || {
-    showy_bar_log "magick (ImageMagick 7+) required for sketchybar plugin"
-    clear_declared_items
-    exit 0
-}
+
+HAVE_MAGICK=0
+showy_bar_have magick && HAVE_MAGICK=1
 
 # Bar geometry. Bars sit inside SketchyBar's pill; tweak via env.
 : "${SHOWY_BAR_PNG_BAR_W:=80}"
-: "${SHOWY_BAR_PNG_BAR_H:=18}"
+NATIVE_ROW_HEIGHT=6
+NATIVE_ROW_RADIUS=3
 
 # ── ARGB helpers ─────────────────────────────────────────────────────
 
@@ -211,12 +312,14 @@ PRIMARY_WARN_HEX="$(showy_bar_role_palette primary warn)"
 PRIMARY_BAD_HEX="$(showy_bar_role_palette primary bad)"
 PRIMARY_UNKNOWN_HEX="$(showy_bar_role_palette primary unknown)"
 TRACK_HEX="$(showy_bar_palette track)"
+TRACK_ARGB="$(argb_from_hex "${TRACK_HEX}")"
 ICON_TEXT_HEX="$(showy_bar_palette icon_text)"
 COUNTDOWN_HEX="$(showy_bar_palette countdown)"
 COUNTDOWN_ARGB="$(argb_from_hex "${COUNTDOWN_HEX}")"
 COUNTDOWN_WARN_HEX="$(showy_bar_palette countdown_warn)"
 COUNTDOWN_WARN_ARGB="$(argb_from_hex "${COUNTDOWN_WARN_HEX}")"
 ELAPSED_HEX="$(showy_bar_palette elapsed)"
+ELAPSED_ARGB="$(argb_from_hex "${ELAPSED_HEX}")"
 
 status_color_for_indicator() {
     case "${1:-none}" in
@@ -262,6 +365,27 @@ click_script_for_status() {
 # on the next plugin tick.
 ICON_CACHE_VERSION="2"
 
+# ── provider icon: native app-font experiment ────────────────────────
+provider_font_icon() {
+    case "$1" in
+        antigravity) printf ':antigravity:' ;;
+        claude)      printf ':claude:' ;;
+        codex)       printf ':codex:' ;;
+        copilot)     printf ':copilot:' ;;
+        cursor)      printf ':cursor:' ;;
+        deepseek)    printf ':deepseek:' ;;
+        gemini)      printf ':gemini:' ;;
+        kiro)        printf ':kiro:' ;;
+        ollama)      printf ':ollama:' ;;
+        openai)      printf ':openai:' ;;
+        perplexity)  printf ':perplexity:' ;;
+        warp)        printf ':warp:' ;;
+        abacus|abacusai|alibaba|alibaba-coding-plan|amp|augment|codebuff|commandcode|crof|doubao|factory|jetbrains|kilo|kimi|kimik2|manus|mimo|minimax|mistral|opencode|opencodego|openrouter|stepfun|synthetic|venice|vertexai|windsurf|zai)
+                    return 1 ;;
+        *)           return 1 ;;
+    esac
+}
+
 # ── provider icon: lazily render SVG → PNG ───────────────────────────
 render_fallback_icon_png() {
     local pid="$1" tmp="$2"
@@ -301,6 +425,8 @@ should_tint_dark_icon_png() {
 
 
 provider_icon_png() {
+    (( HAVE_MAGICK )) || return 1
+
     local pid="$1" status="${2:-none}"
     local status_color="" tint_color="" suffix="" out
     if status_color=$(status_color_for_indicator "${status}"); then
@@ -349,111 +475,31 @@ provider_icon_png() {
     printf '%s\n' "${out}"
 }
 
-# ── stacked-bar PNG ──────────────────────────────────────────────────
+# ── native stacked bar helpers ───────────────────────────────────────
 
-# Args: provider primary_remaining secondary_remaining tertiary_remaining
-#       secondary_elapsed_x tertiary_elapsed_x
-# Pass '' (empty) for missing windows/markers. Echoes path on success.
-render_bar_png() {
-    local pid="$1" rem_p="$2" rem_s="$3" rem_t="$4" marker_s="${5:-}" marker_t="${6:-}"
-    local out="${CACHE_DIR}/bar-${pid}.png"
+clamp_slider_percentage() {
+    local pct="${1:-0}"
+    [[ "${pct}" =~ ^-?[0-9]+$ ]] || pct=0
+    (( pct < 0 )) && pct=0
+    (( pct > 100 )) && pct=100
+    printf '%s\n' "${pct}"
+}
 
-    local has_t=0
-    [[ -n "${rem_t}" ]] && has_t=1
+marker_percentage_from_x() {
+    local marker="$1" w="${SHOWY_BAR_PNG_BAR_W}"
+    [[ "${marker}" =~ ^[0-9]+$ ]] || return 1
+    (( w > 1 )) || return 1
+    (( marker < 0 )) && marker=0
+    (( marker >= w )) && marker=$((w - 1))
+    printf '%s\n' $(( (marker * 100 + (w - 1) / 2) / (w - 1) ))
+}
 
-    local rows=2
-    (( has_t )) && rows=3
-
-    local image_h="${SHOWY_BAR_PNG_BAR_H}"
-    if (( rows == 3 )); then
-        # Allow a slightly taller image when stacking three rows. 22 px gives
-        # us three 6 px bars with a 1 px gap between each row.
-        image_h=22
-    fi
-
-    # Row boundaries (top..bottom inclusive) per row count.
-    local r1_top r1_bot r2_top r2_bot r3_top r3_bot
-    if (( rows == 2 )); then
-        r1_top=2; r1_bot=8
-        r2_top=10; r2_bot=$(( image_h - 2 ))
-    else
-        r1_top=1; r1_bot=6
-        r2_top=8; r2_bot=13
-        r3_top=15; r3_bot=20
-    fi
-
-    # Width fill (round half-up; never blank for nonzero remaining).
-    fill_w() {
-        local pct="${1:-0}"
-        local w="${SHOWY_BAR_PNG_BAR_W}"
-        [[ "${pct}" =~ ^[0-9]+$ ]] || pct=0
-        (( pct < 0 )) && pct=0
-        (( pct > 100 )) && pct=100
-        local f=$(( (pct * w + 50) / 100 ))
-        (( pct > 0 && f == 0 )) && f=1
-        (( f < 0 )) && f=0
-        (( f > w )) && f=$w
-        printf '%s\n' "${f}"
-    }
-
-    local f1 f2 f3
-    f1=$(fill_w "${rem_p}")
-    f2=$(fill_w "${rem_s}")
-    (( has_t )) && f3=$(fill_w "${rem_t}")
-
-    local c1 c2 c3
-    c1=$(showy_bar_role_color primary "${rem_p}")
-    c2=$(showy_bar_role_color secondary "${rem_s}")
-    (( has_t )) && c3=$(showy_bar_role_color tertiary "${rem_t}")
-
-    local args=( -size "${SHOWY_BAR_PNG_BAR_W}x${image_h}" xc:none )
-
-    add_track() {
-        args+=( -fill "$(mhex "${TRACK_HEX}")"
-                -draw "roundrectangle 0,$1 $((SHOWY_BAR_PNG_BAR_W - 1)),$2 3,3" )
-    }
-    add_fill() {
-        local fill="$1" top="$2" bot="$3" hex="$4"
-        (( fill > 0 )) || return 0
-        args+=( -fill "$(mhex "${hex}")"
-                -draw "roundrectangle 0,${top} $((fill - 1)),${bot} 3,3" )
-    }
-    add_marker() {
-        local marker="$1" top="$2" bot="$3"
-        [[ "${marker}" =~ ^[0-9]+$ ]] || return 0
-        (( marker < 0 )) && marker=0
-        (( marker >= SHOWY_BAR_PNG_BAR_W )) && marker=$((SHOWY_BAR_PNG_BAR_W - 1))
-        args+=( -fill "$(mhex "${ELAPSED_HEX}")"
-                -draw "rectangle ${marker},${top} ${marker},${bot}" )
-    }
-
-
-    add_track "${r1_top}" "${r1_bot}"
-    add_fill "${f1}" "${r1_top}" "${r1_bot}" "${c1}"
-    add_track "${r2_top}" "${r2_bot}"
-    add_fill "${f2}" "${r2_top}" "${r2_bot}" "${c2}"
-    if (( has_t )); then
-        add_track "${r3_top}" "${r3_bot}"
-        add_fill "${f3}" "${r3_top}" "${r3_bot}" "${c3}"
-    fi
-    add_marker "${marker_s}" "${r2_top}" "${r2_bot}"
-    if (( has_t )); then
-        add_marker "${marker_t}" "${r3_top}" "${r3_bot}"
-    fi
-
-    local tmp
-    tmp=$(mktemp "${CACHE_DIR}/.bar-${pid}.XXXXXX") || return 1
-    if magick "${args[@]}" "PNG32:${tmp}" >/dev/null 2>&1; then
-        if [[ ! -f "${out}" ]] || ! cmp -s "${tmp}" "${out}"; then
-            mv -f "${tmp}" "${out}"
-        else
-            rm -f "${tmp}"
-        fi
-        printf '%s\n' "${out}"
-        return 0
-    fi
-    rm -f "${tmp}"
-    return 1
+slider_click_script() {
+    local item="$1" pct="$2"
+    printf 'command -v sketchybar >/dev/null 2>&1 && sketchybar --set %s slider.percentage=%s >/dev/null 2>&1; %s' \
+        "$(shell_quote "${item}")" \
+        "$(clamp_slider_percentage "${pct}")" \
+        "${CLICK}"
 }
 
 # ── label rendering ──────────────────────────────────────────────────
@@ -552,10 +598,34 @@ rows=$(printf '%s' "${filtered}" | jq -r '
 while IFS=$'\x1f' read -r pid rem_p p_reset rem_s s_reset s_window rem_t t_reset t_window status status_url; do
     [[ -n "${pid}" ]] || continue
 
-    icon=$(provider_icon_png "${pid}" "${status}" || true)
+    icon=""
+    font_icon=""
+    if [[ "${SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE}" == "font" ]]; then
+        font_icon=$(provider_font_icon "${pid}" || true)
+        [[ -n "${font_icon}" ]] || icon=$(provider_icon_png "${pid}" "${status}" || true)
+    else
+        icon=$(provider_icon_png "${pid}" "${status}" || true)
+    fi
     marker_s=$(elapsed_marker_x "${s_reset}" "${s_window}" || true)
     marker_t=$(elapsed_marker_x "${t_reset}" "${t_window}" || true)
-    bar=$(render_bar_png "${pid}" "${rem_p}" "${rem_s}" "${rem_t}" "${marker_s}" "${marker_t}" || true)
+
+    rem_p_pct=$(clamp_slider_percentage "${rem_p}")
+    rem_s_pct=$(clamp_slider_percentage "${rem_s}")
+    rem_t_pct=$(clamp_slider_percentage "${rem_t}")
+    marker_s_pct=$(marker_percentage_from_x "${marker_s}" || true)
+    marker_t_pct=$(marker_percentage_from_x "${marker_t}" || true)
+
+    has_t=0
+    [[ -n "${rem_t}" ]] && has_t=1
+    if (( has_t )); then
+        primary_y=7
+        secondary_y=0
+        tertiary_y=-7
+    else
+        primary_y=4
+        secondary_y=-4
+        tertiary_y=-4
+    fi
 
     minutes=""
     if [[ -n "${p_reset}" ]]; then
@@ -563,22 +633,62 @@ while IFS=$'\x1f' read -r pid rem_p p_reset rem_s s_reset s_window rem_t t_reset
     fi
     label=""; color=""
     icon_click=$(click_script_for_status "${status}" "${status_url}")
+    font_icon_color="$(argb_from_hex "${ICON_TEXT_HEX}")"
+    font_icon_item_width=$((SHOWY_BAR_SKETCHYBAR_ICON_WIDTH + SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_FONT_PADDING_RIGHT))
+    status_icon_hex=$(status_color_for_indicator "${status}" || true)
+    if [[ -n "${status_icon_hex}" ]]; then
+        font_icon_color="$(argb_from_hex "${status_icon_hex}")"
+    fi
     { IFS= read -r label; IFS= read -r color; } < <(label_for_minutes "${minutes}" "${rem_p}" "${p_reset}") || true
     [[ -n "${color}" ]] || color="${COUNTDOWN_ARGB}"
+
+    primary_item="showy_bar.${pid}.primary"
+    secondary_item="showy_bar.${pid}.secondary"
+    tertiary_item="showy_bar.${pid}.tertiary"
+    secondary_marker_item="showy_bar.${pid}.secondary_marker"
+    tertiary_marker_item="showy_bar.${pid}.tertiary_marker"
+
+    primary_click=$(slider_click_script "${primary_item}" "${rem_p_pct}")
+    secondary_click=$(slider_click_script "${secondary_item}" "${rem_s_pct}")
+    tertiary_click=$(slider_click_script "${tertiary_item}" "${rem_t_pct}")
+    secondary_marker_click=$(slider_click_script "${secondary_marker_item}" "${marker_s_pct:-0}")
+    tertiary_marker_click=$(slider_click_script "${tertiary_marker_item}" "${marker_t_pct:-0}")
 
     args=(
         --set "showy_bar.${pid}.label" drawing=on label="${label}" label.color="${color}" background.color=0x00000000 background.height=0
     )
-    if [[ -n "${icon}" && -s "${icon}" ]]; then
-        args+=( --set "showy_bar.${pid}.icon" drawing=on background.image="${icon}" background.image.drawing=on background.image.scale="${SHOWY_BAR_SKETCHYBAR_ICON_SCALE}" background.color=0x00000000 background.height=0 padding_left="${SHOWY_BAR_SKETCHYBAR_ICON_PADDING_LEFT}" padding_right=0 width="${SHOWY_BAR_SKETCHYBAR_ICON_WIDTH}" click_script="${icon_click}" )
+    if [[ -n "${font_icon}" ]]; then
+        args+=( --set "showy_bar.${pid}.icon" drawing=on icon.drawing=on icon="${font_icon}" icon.font="${SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_FONT}" icon.color="${font_icon_color}" icon.align=center icon.width="${SHOWY_BAR_SKETCHYBAR_ICON_WIDTH}" icon.padding_left=0 icon.padding_right=0 label.drawing=off background.image.drawing=off background.color=0x00000000 background.height=0 padding_left="${SHOWY_BAR_SKETCHYBAR_ICON_PADDING_LEFT}" padding_right=0 width="${font_icon_item_width}" click_script="${icon_click}" )
+    elif [[ -n "${icon}" && -s "${icon}" ]]; then
+        args+=( --set "showy_bar.${pid}.icon" drawing=on icon.drawing=off label.drawing=off background.image="${icon}" background.image.drawing=on background.image.scale="${SHOWY_BAR_SKETCHYBAR_ICON_SCALE}" background.color=0x00000000 background.height=0 padding_left="${SHOWY_BAR_SKETCHYBAR_ICON_PADDING_LEFT}" padding_right=0 width="${SHOWY_BAR_SKETCHYBAR_ICON_WIDTH}" click_script="${icon_click}" )
     else
         args+=( --set "showy_bar.${pid}.icon" drawing=off click_script="${CLICK}" )
     fi
-    if [[ -n "${bar}" && -s "${bar}" ]]; then
-        args+=( --set "showy_bar.${pid}.bar" drawing=on background.image="${bar}" background.image.drawing=on background.image.scale=1.0 background.color=0x00000000 background.height=0 padding_left=2 padding_right=2 width="${SHOWY_BAR_SKETCHYBAR_BAR_WIDTH}" )
+
+    args+=(
+        --set "${primary_item}" drawing=on slider.percentage="${rem_p_pct}" slider.highlight_color="$(argb_from_hex "$(showy_bar_role_color primary "${rem_p_pct}")")" slider.background.color="${TRACK_ARGB}" slider.background.height="${NATIVE_ROW_HEIGHT}" slider.background.corner_radius="${NATIVE_ROW_RADIUS}" slider.knob.drawing=off background.color=0x00000000 background.height=0 padding_left=0 padding_right=0 width=0 y_offset="${primary_y}" click_script="${primary_click}"
+        --set "${secondary_item}" drawing=on slider.percentage="${rem_s_pct}" slider.highlight_color="$(argb_from_hex "$(showy_bar_role_color secondary "${rem_s_pct}")")" slider.background.color="${TRACK_ARGB}" slider.background.height="${NATIVE_ROW_HEIGHT}" slider.background.corner_radius="${NATIVE_ROW_RADIUS}" slider.knob.drawing=off background.color=0x00000000 background.height=0 padding_left=0 padding_right=0 width=0 y_offset="${secondary_y}" click_script="${secondary_click}"
+    )
+
+    if (( has_t )); then
+        args+=( --set "${tertiary_item}" drawing=on slider.percentage="${rem_t_pct}" slider.highlight_color="$(argb_from_hex "$(showy_bar_role_color tertiary "${rem_t_pct}")")" slider.background.color="${TRACK_ARGB}" slider.background.height="${NATIVE_ROW_HEIGHT}" slider.background.corner_radius="${NATIVE_ROW_RADIUS}" slider.knob.drawing=off background.color=0x00000000 background.height=0 padding_left=0 padding_right=0 width=0 y_offset="${tertiary_y}" click_script="${tertiary_click}" )
     else
-        args+=( --set "showy_bar.${pid}.bar" drawing=off )
+        args+=( --set "${tertiary_item}" drawing=off slider.percentage=0 background.color=0x00000000 background.height=0 padding_left=0 padding_right=0 width=0 y_offset="${tertiary_y}" click_script="${tertiary_click}" )
     fi
+
+    if [[ -n "${marker_s_pct}" ]]; then
+        args+=( --set "${secondary_marker_item}" drawing=on slider.percentage="${marker_s_pct}" slider.highlight_color=0x00000000 slider.background.color=0x00000000 slider.background.height="${NATIVE_ROW_HEIGHT}" slider.background.corner_radius=0 slider.knob.drawing=on slider.knob.color=0x00000000 slider.knob.width=1 slider.knob.padding_left=0 slider.knob.padding_right=0 slider.knob.background.drawing=on slider.knob.background.color="${ELAPSED_ARGB}" slider.knob.background.height="${NATIVE_ROW_HEIGHT}" slider.knob.background.corner_radius=0 background.color=0x00000000 background.height=0 padding_left=0 padding_right=0 width=0 y_offset="${secondary_y}" click_script="${secondary_marker_click}" )
+    else
+        args+=( --set "${secondary_marker_item}" drawing=off slider.percentage=0 y_offset="${secondary_y}" click_script="${secondary_marker_click}" )
+    fi
+
+    if (( has_t )) && [[ -n "${marker_t_pct}" ]]; then
+        args+=( --set "${tertiary_marker_item}" drawing=on slider.percentage="${marker_t_pct}" slider.highlight_color=0x00000000 slider.background.color=0x00000000 slider.background.height="${NATIVE_ROW_HEIGHT}" slider.background.corner_radius=0 slider.knob.drawing=on slider.knob.color=0x00000000 slider.knob.width=1 slider.knob.padding_left=0 slider.knob.padding_right=0 slider.knob.background.drawing=on slider.knob.background.color="${ELAPSED_ARGB}" slider.knob.background.height="${NATIVE_ROW_HEIGHT}" slider.knob.background.corner_radius=0 background.color=0x00000000 background.height=0 padding_left=0 padding_right=0 width=0 y_offset="${tertiary_y}" click_script="${tertiary_marker_click}" )
+    else
+        args+=( --set "${tertiary_marker_item}" drawing=off slider.percentage=0 y_offset="${tertiary_y}" click_script="${tertiary_marker_click}" )
+    fi
+
+    args+=( --set "showy_bar.${pid}.slot" drawing=on icon.drawing=off label.drawing=off background.color=0x00000000 background.height=0 padding_left=0 padding_right=0 width="${SHOWY_BAR_SKETCHYBAR_BAR_WIDTH}" click_script="${CLICK}" )
 
     if (( ${#args[@]} > 0 )); then
         sketchybar "${args[@]}" >/dev/null 2>&1 || true

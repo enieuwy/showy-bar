@@ -13,7 +13,7 @@ codexbar usage --format json
 bin/showy-bar-fetch     ←  shared cache + flock + last-known-good
        │  ~/.cache/showy-bar/usage.json
        ├──► bin/showy-bar-state                 (stable provider/layout state JSON)
-       ├──► sketchybar/plugins/showy_bar.sh    (per-provider PNG icon + bar)
+       ├──► sketchybar/plugins/showy_bar.sh    (native SketchyBar rows + icons)
        ├──► bin/showy-bar-zellij-bar           (ANSI strip for zjstatus pipe)
        └──► bin/showy-bar-tmux-bar             (tmux #[…] markup for status-right)
 ```
@@ -33,13 +33,17 @@ single optional env file.
     `brew install steipete/tap/codexbar`, then configure `~/.codexbar/config.json`.
     CodexBar's web-backed providers remain macOS-only; CLI/OAuth/API/local
     providers work where CodexBar supports them.
-- `bash` 4+, `jq`, ImageMagick 7+ (`magick`), and a `date` that understands
-  either `-j -f` (BSD/macOS) or `-d` (GNU coreutils).
+- `bash` 4+ (macOS users usually need Homebrew `bash`), `jq`, and a `date`
+  that understands either `-j -f` (BSD/macOS) or `-d` (GNU coreutils).
+- SketchyBar integration also needs `sketchybar` on the PATH. Font icon mode
+  needs `sketchybar-app-font`; SVG fallback icons need ImageMagick 7+
+  (`magick`). Native usage rows do not need `magick`.
 - Optional: `flock` for inter-process locking; falls back to an owner-scoped
   `mkdir` lock when missing.
 
-The SketchyBar plugin sources provider icons from
-`/Applications/CodexBar.app/Contents/Resources/ProviderIcon-<id>.svg`. No
+In `SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE=font`, mapped providers use
+`sketchybar-app-font` glyphs and the rest fall back to CodexBar's bundled SVGs
+at `/Applications/CodexBar.app/Contents/Resources/ProviderIcon-<id>.svg`. No
 icons are bundled in this repo.
 
 ## Install
@@ -124,9 +128,9 @@ Dark, Nord, and Tokyo Night.
 
 Each preview uses the same two-provider fixture with `3:29` and `23m`
 countdowns, good/warn/bad remaining-usage colors, and different pacing-marker
-positions visible. SketchyBar previews are composed from the plugin-generated
-provider icon/bar PNGs using CodexBar's bundled provider SVG logos. Terminal
-previews show the deterministic `showy-bar --preview` output.
+positions visible. SketchyBar previews are static renderings of the same
+icon/row layout. Terminal previews show the deterministic `showy-bar --preview`
+output.
 
 | theme name | SketchyBar image | terminal / Zellij image |
 |---|---|---|
@@ -158,6 +162,7 @@ Useful knobs:
 | `SHOWY_BAR_PALETTE_ICON_TEXT`       | `f2f4f8`                               | Fallback provider icon text color                     |
 | `SHOWY_BAR_SKETCHYBAR_CLICK`        | `open -b com.steipete.codexbar`        | Default SketchyBar click action; degraded icons open provider status URLs |
 | `SHOWY_BAR_SKETCHYBAR_PILL_*`       | `14` / `28` / `0xcc24273a`             | SketchyBar bracket radius, height, and ARGB color     |
+| `SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE` | `svg`                            | `svg` for CodexBar SVG icons, `font` for mapped app-font glyphs with SVG fallback |
 | `SHOWY_BAR_CODEXBAR_RESOURCES`      | `/Applications/CodexBar.app/...`       | Where to find provider SVGs                           |
 | `SHOWY_BAR_SKETCHYBAR_COMPACT_PROVIDER_COUNT` | `5` | Provider-count breakpoint exposed by `showy-bar-state` for external layout managers |
 
@@ -187,9 +192,8 @@ Cache lives at `${XDG_CACHE_HOME:-~/.cache}/showy-bar/usage.json`.
   many bars are running.
 - SketchyBar compares the desired provider set to its last declared state once
   per tick; add/remove and bracket rebuild only happen when that set changes.
-- SketchyBar's plugin only writes a PNG when its bytes change (atomic
-  `cmp`-then-`mv`).
-- Provider icon PNGs are generated once per provider per cache directory.
+- SVG fallback icon PNGs are generated once per provider per cache directory.
+- Native SketchyBar rows and font icons avoid steady-state image generation.
 - Bars never blank on transient `codexbar` failure: the fetcher serves
   the last-known-good cache and exits 0.
 
