@@ -90,8 +90,10 @@ showy_bar_load_config
 : "${SHOWY_BAR_ZELLIJ_WIDGET:=pipe_showy_bar}"
 : "${SHOWY_BAR_ZELLIJ_PIPE_NAME:=showy-bar}"
 : "${SHOWY_BAR_ZELLIJ_PIPE_INTERVAL:=10}"
+: "${SHOWY_BAR_ZELLIJ_PIPE_TIMEOUT_TENTHS:=20}"
 : "${SHOWY_BAR_ZELLIJ_BAR_WIDTH:=12}"
 : "${SHOWY_BAR_ZELLIJ_BIN:=zellij}"
+: "${SHOWY_BAR_ZELLIJ_PLUGIN:=file:${HOME}/.config/zellij/plugins/zjstatus.wasm}"
 
 : "${SHOWY_BAR_USAGE_FILE:=${SHOWY_BAR_CACHE_DIR}/usage.json}"
 : "${SHOWY_BAR_USAGE_STAMP:=${SHOWY_BAR_CACHE_DIR}/usage.json.updated-at}"

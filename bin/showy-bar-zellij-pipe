@@ -30,15 +30,40 @@ showy_bar_have "${SHOWY_BAR_ZELLIJ_BIN}" || showy_bar_die "zellij is required fo
 interval="${SHOWY_BAR_ZELLIJ_PIPE_INTERVAL}"
 widget="${SHOWY_BAR_ZELLIJ_WIDGET}"
 pipe_name="${SHOWY_BAR_ZELLIJ_PIPE_NAME}"
+plugin="${SHOWY_BAR_ZELLIJ_PLUGIN}"
+pipe_timeout_tenths="${SHOWY_BAR_ZELLIJ_PIPE_TIMEOUT_TENTHS}"
+[[ "${pipe_timeout_tenths}" =~ ^[0-9]+$ ]] || pipe_timeout_tenths=20
+
+send_pipe() {
+    local payload="$1" child waited=0
+    local args=(pipe --name "${pipe_name}")
+    if [[ -n "${plugin}" ]]; then
+        args+=(--plugin "${plugin}")
+    fi
+    args+=(-- "${payload}")
+
+    "${SHOWY_BAR_ZELLIJ_BIN}" "${args[@]}" </dev/null >/dev/null 2>&1 &
+    child=$!
+    while kill -0 "${child}" 2>/dev/null; do
+        if (( waited >= pipe_timeout_tenths )); then
+            kill "${child}" 2>/dev/null || true
+            wait "${child}" 2>/dev/null || true
+            return 1
+        fi
+        sleep 0.1
+        waited=$((waited + 1))
+    done
+    wait "${child}" >/dev/null 2>&1
+}
 
 # zjstatus consumes the protocol from the payload itself:
 #   zjstatus::pipe::<widget>::<output>
-# `--name` only routes the message to plugins listening on that name;
-# zjstatus listens on any name, so we just use a stable id for clarity.
+# Direct the pipe at the zjstatus plugin. Broadcasting to every plugin can
+# leave the CLI pipe blocked by an unrelated plugin's backpressure, which pins
+# this feeder after the first update.
 while :; do
     if output=$("${BAR}" 2>/dev/null) && [[ -n "${output}" ]]; then
-        "${SHOWY_BAR_ZELLIJ_BIN}" pipe --name "${pipe_name}" -- \
-            "zjstatus::pipe::${widget}::${output}" >/dev/null 2>&1 || true
+        send_pipe "zjstatus::pipe::${widget}::${output}" || true
     fi
     sleep "${interval}"
 done
