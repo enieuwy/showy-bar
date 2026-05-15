@@ -217,19 +217,29 @@ run_sketchybar_plugin() {
 run_sketchybar_plugin_without_magick() {
     local fixture="$1" cache="$2" log="$3"
     shift 3
-    local fixture_file no_magick_path bash_path jq_path
+    local fixture_file no_magick_path tool tool_path
     fixture_file=$(fixture_path "${fixture}")
     no_magick_path="${TMP}/no-magick-bin"
     mkdir -p "${no_magick_path}"
-    bash_path=$(command -v bash)
-    [[ -x /opt/homebrew/bin/bash ]] && bash_path=/opt/homebrew/bin/bash
-    jq_path=$(command -v jq)
-    ln -sf "${bash_path}" "${no_magick_path}/bash"
-    ln -sf "${jq_path}" "${no_magick_path}/jq"
+    for tool in bash jq readlink dirname mkdir mktemp mv rm rmdir date stat sed tr cat; do
+        if [[ "${tool}" == "bash" && -x /opt/homebrew/bin/bash ]]; then
+            tool_path=/opt/homebrew/bin/bash
+        else
+            tool_path=$(command -v "${tool}") || {
+                fail "no-magick helper can find required tool ${tool}"
+                return 1
+            }
+        fi
+        ln -sf "${tool_path}" "${no_magick_path}/${tool}"
+    done
     ln -sf "${stub_dir}/codexbar" "${no_magick_path}/codexbar"
     ln -sf "${stub_dir}/sketchybar" "${no_magick_path}/sketchybar"
+    if PATH="${no_magick_path}" command -v magick >/dev/null 2>&1; then
+        fail "no-magick helper excludes magick from PATH"
+        return 1
+    fi
     env \
-        PATH="${no_magick_path}:/usr/bin:/bin:/usr/sbin:/sbin" \
+        PATH="${no_magick_path}" \
         SHOWY_BAR_NO_CONFIG=1 \
         SHOWY_BAR_CACHE_DIR="${cache}" \
         SHOWY_BAR_SKETCHYBAR_IMAGE_CACHE="${cache}/sb" \
@@ -444,6 +454,12 @@ theme_current_xdg=$(mktemp -d "${TMP}/xdg-theme-current.XXXXXX")
 out=$(run_theme "${theme_current_xdg}" --current)
 assert_equals "theme current is none without config" "(none)" "${out}"
 
+theme_export_xdg=$(mktemp -d "${TMP}/xdg-theme-export.XXXXXX")
+mkdir -p "${theme_export_xdg}/showy-bar"
+printf '%s\n' 'export SHOWY_BAR_THEME="default"' > "${theme_export_xdg}/showy-bar/config.env"
+out=$(run_theme "${theme_export_xdg}" --current)
+assert_equals "theme current reads exported assignment" "default" "${out}"
+
 theme_set_xdg=$(mktemp -d "${TMP}/xdg-theme-set.XXXXXX")
 theme_config="${theme_set_xdg}/showy-bar/config.env"
 run_theme "${theme_set_xdg}" --set default
@@ -455,11 +471,12 @@ theme_config="${theme_replace_xdg}/showy-bar/config.env"
 printf '%s\n' \
     'FOO=1' \
     '# SHOWY_BAR_THEME=old-comment' \
-    '    SHOWY_BAR_THEME=old-active' \
+    'export SHOWY_BAR_THEME=old-active' \
+    '    SHOWY_BAR_THEME=catppuccin-latte' \
     'BAR=2' \
     > "${theme_config}"
 run_theme "${theme_replace_xdg}" --set default
-assert_equals "theme set preserves config and replaces active line" $'FOO=1\n# SHOWY_BAR_THEME=old-comment\n    SHOWY_BAR_THEME=default\nBAR=2' "$(< "${theme_config}")"
+assert_equals "theme set preserves config and coalesces active lines" $'FOO=1\n# SHOWY_BAR_THEME=old-comment\nexport SHOWY_BAR_THEME=default\nBAR=2' "$(< "${theme_config}")"
 
 theme_unset_xdg=$(mktemp -d "${TMP}/xdg-theme-unset.XXXXXX")
 mkdir -p "${theme_unset_xdg}/showy-bar"
@@ -467,11 +484,12 @@ theme_config="${theme_unset_xdg}/showy-bar/config.env"
 printf '%s\n' \
     'FOO=1' \
     '# SHOWY_BAR_THEME=old-comment' \
+    'export SHOWY_BAR_THEME=catppuccin-mocha' \
     'SHOWY_BAR_THEME=default' \
     'BAR=2' \
     > "${theme_config}"
 run_theme "${theme_unset_xdg}" --unset
-assert_equals "theme unset removes only active line" $'FOO=1\n# SHOWY_BAR_THEME=old-comment\nBAR=2' "$(< "${theme_config}")"
+assert_equals "theme unset removes every active line" $'FOO=1\n# SHOWY_BAR_THEME=old-comment\nBAR=2' "$(< "${theme_config}")"
 
 theme_bogus_xdg=$(mktemp -d "${TMP}/xdg-theme-bogus.XXXXXX")
 mkdir -p "${theme_bogus_xdg}/showy-bar"
@@ -643,6 +661,10 @@ assert_equals "state compact recommendation defaults below threshold" "false" "$
 out=$(run_state codexbar-mixed.json SHOWY_BAR_SKETCHYBAR_COMPACT_PROVIDER_COUNT=3)
 assert_equals "state compact threshold is configurable" "true" "$(printf '%s' "${out}" | jq -r '.sketchybar.compactRecommended')"
 
+out=$(run_state codexbar-mixed.json SHOWY_BAR_SKETCHYBAR_COMPACT_PROVIDER_COUNT=03)
+assert_equals "state compact threshold accepts leading zeroes" "3" "$(printf '%s' "${out}" | jq -r '.sketchybar.compactProviderThreshold')"
+assert_equals "state leading-zero compact threshold drives recommendation" "true" "$(printf '%s' "${out}" | jq -r '.sketchybar.compactRecommended')"
+
 out=$(run_state codexbar-mixed.json SHOWY_BAR_PROVIDERS_EXCLUDE=codex)
 assert_equals "state honors provider excludes" "claude,gemini" "$(printf '%s' "${out}" | jq -r '.providers | join(",")')"
 
@@ -674,7 +696,14 @@ assert_contains "bootstrap preserves native bar slot width" "showy_bar.claude.sl
 assert_contains "bootstrap preserves native bar width" "width=84" "${item_log}"
 
 cache=$(mk_cache)
-seed_sketchybar_state "${cache}" claude codex gemini
+log="${TMP}/sb-items-pill.log"
+run_sketchybar_items codexbar-mixed.json "${cache}" "${log}" PILL_RADIUS=6 PILL_HEIGHT=18
+item_log="$(< "${log}")"
+assert_contains "bootstrap forwards legacy pill radius" "background.corner_radius=6" "${item_log}"
+assert_contains "bootstrap forwards legacy pill height" "background.height=18" "${item_log}"
+
+cache=$(mk_cache)
+seed_sketchybar_state "${cache}" codex claude gemini
 log="${TMP}/sb-items-stale.log"
 run_sketchybar_items codexbar-mixed.json "${cache}" "${log}"
 item_log="$(< "${log}")"
@@ -737,13 +766,16 @@ assert_contains "plugin uses derived tertiary row color" "showy_bar.gemini.terti
 assert_contains "plugin uses native track color" "slider.background.color=0xff3a3a4a" "${plugin_log}"
 assert_contains "plugin draws elapsed marker overlay" "--set showy_bar.claude.secondary_marker drawing=on slider.percentage=100" "${plugin_log}"
 assert_contains "plugin uses elapsed marker color" "slider.knob.background.color=0xffbe95ff" "${plugin_log}"
-assert_contains "plugin uses two-row primary y offset" "showy_bar.claude.primary drawing=on slider.percentage=83" "${plugin_log}"
-assert_contains "plugin positions two-row primary above center" "y_offset=4 click_script=command -v sketchybar" "${plugin_log}"
-assert_contains "plugin positions two-row secondary below center" "showy_bar.claude.secondary drawing=on slider.percentage=81" "${plugin_log}"
-assert_contains "plugin uses three-row tertiary y offset" "showy_bar.gemini.tertiary drawing=on slider.percentage=100" "${plugin_log}"
-assert_contains "plugin positions tertiary below three-row stack" "y_offset=-7 click_script=command -v sketchybar" "${plugin_log}"
+assert_contains "plugin positions two-row primary above center" "showy_bar.claude.primary drawing=on slider.percentage=83 slider.highlight_color=0xff25be6a slider.background.color=0xff3a3a4a slider.background.height=6 slider.background.corner_radius=3 slider.knob.drawing=off background.color=0x00000000 background.height=0 padding_left=0 padding_right=0 width=0 y_offset=4" "${plugin_log}"
+assert_contains "plugin positions two-row secondary below center" "showy_bar.claude.secondary drawing=on slider.percentage=81 slider.highlight_color=0xff14683a slider.background.color=0xff3a3a4a slider.background.height=6 slider.background.corner_radius=3 slider.knob.drawing=off background.color=0x00000000 background.height=0 padding_left=0 padding_right=0 width=0 y_offset=-4" "${plugin_log}"
+assert_contains "plugin positions tertiary below three-row stack" "showy_bar.gemini.tertiary drawing=on slider.percentage=100 slider.highlight_color=0xff14683a slider.background.color=0xff3a3a4a slider.background.height=6 slider.background.corner_radius=3 slider.knob.drawing=off background.color=0x00000000 background.height=0 padding_left=0 padding_right=0 width=0 y_offset=-7" "${plugin_log}"
 assert_contains "plugin click reset keeps slider rows stable" "sketchybar --set 'showy_bar.claude.primary' slider.percentage=83" "${plugin_log}"
-assert_not_contains "plugin no longer writes provider bar PNGs" "bar-claude.png" "${plugin_log}"
+assert_not_contains "plugin no longer logs provider bar PNGs" "bar-claude.png" "${plugin_log}"
+if compgen -G "${cache}/sb/bar-*.png" >/dev/null; then
+    fail "plugin no longer writes provider bar PNGs" "$(compgen -G "${cache}/sb/bar-*.png")"
+else
+    ok "plugin no longer writes provider bar PNGs"
+fi
 
 cache=$(mk_cache)
 log="${TMP}/sb-no-magick.log"
@@ -751,10 +783,10 @@ run_sketchybar_plugin_without_magick codexbar-mixed.json "${cache}" "${log}"
 plugin_log="$(< "${log}")"
 assert_contains "plugin updates native bars without magick" "--set showy_bar.claude.primary drawing=on slider.percentage=83" "${plugin_log}"
 assert_contains "plugin hides icons when magick is unavailable" "--set showy_bar.claude.icon drawing=off click_script=open -b com.steipete.codexbar" "${plugin_log}"
-if [[ ! -e "${cache}/sb/bar-claude.png" ]]; then
-    ok "plugin does not rasterize bars without magick"
+if compgen -G "${cache}/sb/bar-*.png" >/dev/null; then
+    fail "plugin does not rasterize bars without magick" "$(compgen -G "${cache}/sb/bar-*.png")"
 else
-    fail "plugin does not rasterize bars without magick"
+    ok "plugin does not rasterize bars without magick"
 fi
 
 cache=$(mk_cache)
@@ -766,6 +798,14 @@ assert_contains "plugin maps codex provider to app font icon" "showy_bar.codex.i
 assert_contains "plugin maps gemini provider to app font icon" "showy_bar.gemini.icon drawing=on icon.drawing=on icon=:gemini:" "${plugin_log}"
 assert_contains "plugin widens font icon item to make a real native bar gap" "showy_bar.claude.icon drawing=on icon.drawing=on icon=:claude: icon.font=sketchybar-app-font:Regular:14.0 icon.color=0xfff2f4f8 icon.align=center icon.width=22 icon.padding_left=0 icon.padding_right=0 label.drawing=off background.image.drawing=off background.color=0x00000000 background.height=0 padding_left=5 padding_right=0 width=24" "${plugin_log}"
 assert_not_contains "font icon mode avoids provider PNG cache paths" "icon-v2-" "${plugin_log}"
+
+cache=$(mk_cache)
+log="${TMP}/sb-font-status-no-magick.log"
+run_sketchybar_plugin_without_magick codexbar-status-major.json "${cache}" "${log}" SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE=font
+font_status_log="$(< "${log}")"
+assert_contains "font icon mode colors degraded providers without magick" "showy_bar.codex.icon drawing=on icon.drawing=on icon=:codex: icon.font=sketchybar-app-font:Regular:14.0 icon.color=0xffee5396" "${font_status_log}"
+assert_contains "font icon mode preserves degraded provider status click without magick" "click_script=open 'https://status.openai.com/'" "${font_status_log}"
+assert_not_contains "font icon mode skips status PNG for mapped provider without magick" "icon-v2-codex-major.png" "${font_status_log}"
 
 if command -v magick >/dev/null 2>&1; then
     cache=$(mk_cache)
@@ -780,13 +820,6 @@ if command -v magick >/dev/null 2>&1; then
     assert_contains "plugin uses status-tinted icon" "icon-v2-codex-major.png" "${status_log}"
     assert_contains "plugin routes degraded status icon to provider status page" "click_script=open 'https://status.openai.com/'" "${status_log}"
 
-    cache=$(mk_cache)
-    log="${TMP}/sb-font-status.log"
-    run_sketchybar_plugin codexbar-status-major.json "${cache}" "${log}" SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE=font
-    font_status_log="$(< "${log}")"
-    assert_contains "font icon mode colors degraded providers like PNG tinting" "showy_bar.codex.icon drawing=on icon.drawing=on icon=:codex: icon.font=sketchybar-app-font:Regular:14.0 icon.color=0xffee5396" "${font_status_log}"
-    assert_contains "font icon mode preserves degraded provider status click" "click_script=open 'https://status.openai.com/'" "${font_status_log}"
-    assert_not_contains "font icon mode skips status PNG for mapped provider" "icon-v2-codex-major.png" "${font_status_log}"
 
     opencode_fixture="${TMP}/codexbar-opencode.json"
     printf '%s\n' '[{"provider":"opencode","usage":{"primary":{"usedPercent":12,"windowMinutes":300,"resetsAt":"2099-01-01T05:40:00Z"}}}]' > "${opencode_fixture}"

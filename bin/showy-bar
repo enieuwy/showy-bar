@@ -128,7 +128,7 @@ current_theme_value() {
     [[ -r "${CONFIG_FILE}" ]] || return 0
 
     while IFS= read -r line || [[ -n "${line}" ]]; do
-        if [[ "${line}" =~ ^[[:space:]]*SHOWY_BAR_THEME= ]]; then
+        if [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?SHOWY_BAR_THEME= ]]; then
             value="${line#*=}"
             value="${value%%[[:space:]]*}"
             value=$(strip_matching_quotes "${value}")
@@ -149,9 +149,10 @@ print_current_theme() {
 
 write_config_lines() {
     local mode="$1" theme="${2:-}"
-    local tmp line indent="" last_index
+    local tmp line last_index
     local -a lines=()
-    local match_index=-1
+    local matched=0
+    local wrote=0
     local i
 
     if [[ -f "${CONFIG_FILE}" ]]; then
@@ -160,30 +161,32 @@ write_config_lines() {
         done < "${CONFIG_FILE}"
     fi
 
-    for i in "${!lines[@]}"; do
-        if [[ "${lines[$i]}" =~ ^([[:space:]]*)SHOWY_BAR_THEME= ]]; then
-            match_index="${i}"
-            indent="${BASH_REMATCH[1]}"
+    for line in "${lines[@]}"; do
+        if [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?SHOWY_BAR_THEME= ]]; then
+            matched=1
+            break
         fi
     done
 
-    if [[ "${mode}" == "unset" && "${match_index}" == -1 ]]; then
+    if [[ "${mode}" == "unset" && "${matched}" == 0 ]]; then
         return 0
     fi
 
     tmp=$(mktemp "${CONFIG_FILE}.tmp.XXXXXX") || die "cannot create temporary config next to ${CONFIG_FILE}"
     if ! {
         for i in "${!lines[@]}"; do
-            if [[ "${i}" == "${match_index}" ]]; then
-                if [[ "${mode}" == "set" ]]; then
-                    printf '%sSHOWY_BAR_THEME=%s\n' "${indent}" "${theme}"
+            line="${lines[$i]}"
+            if [[ "${line}" =~ ^([[:space:]]*)(export[[:space:]]+)?SHOWY_BAR_THEME= ]]; then
+                if [[ "${mode}" == "set" && "${wrote}" == 0 ]]; then
+                    printf '%s%sSHOWY_BAR_THEME=%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]:-}" "${theme}"
+                    wrote=1
                 fi
-            else
-                printf '%s\n' "${lines[$i]}"
+                continue
             fi
+            printf '%s\n' "${line}"
         done
 
-        if [[ "${mode}" == "set" && "${match_index}" == -1 ]]; then
+        if [[ "${mode}" == "set" && "${matched}" == 0 ]]; then
             if ((${#lines[@]} > 0)); then
                 last_index=$((${#lines[@]} - 1))
                 [[ -z "${lines[$last_index]}" ]] || printf '\n'

@@ -32,17 +32,18 @@
     }
     REPO_ROOT="$(resolve_repo_root)"
 
-    # shellcheck disable=SC1091
-    . "${REPO_ROOT}/lib/common.sh"
-    # shellcheck disable=SC1091
-    . "${REPO_ROOT}/lib/strip.sh"
-
     if [[ -z "${SHOWY_BAR_SKETCHYBAR_PILL_RADIUS:-}" && -n "${PILL_RADIUS:-}" ]]; then
         export SHOWY_BAR_SKETCHYBAR_PILL_RADIUS="${PILL_RADIUS}"
     fi
     if [[ -z "${SHOWY_BAR_SKETCHYBAR_PILL_HEIGHT:-}" && -n "${PILL_HEIGHT:-}" ]]; then
         export SHOWY_BAR_SKETCHYBAR_PILL_HEIGHT="${PILL_HEIGHT}"
     fi
+
+    # shellcheck disable=SC1091
+    . "${REPO_ROOT}/lib/common.sh"
+    # shellcheck disable=SC1091
+    . "${REPO_ROOT}/lib/strip.sh"
+
     # The plugin runs as a child process now, so export every showy-bar knob the
     # user may have set in sketchybarrc before sourcing this bootstrap file.
     while IFS= read -r cb_var; do

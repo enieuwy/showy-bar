@@ -76,16 +76,17 @@ case "${mode}" in
         jq -n \
             --argjson providers "${providers_json}" \
             --argjson available "${available}" \
-            --argjson compact_threshold "${threshold}" \
-            '{
+            --arg compact_threshold "${threshold}" \
+            '($compact_threshold | tonumber) as $compact_threshold_num
+            | {
                 available: $available,
                 providers: $providers,
                 providerCount: ($providers | length),
                 sketchybar: {
                     itemPrefix: "showy_bar",
                     bracket: "showy_bar_bracket",
-                    compactProviderThreshold: $compact_threshold,
-                    compactRecommended: (($providers | length) >= $compact_threshold)
+                    compactProviderThreshold: $compact_threshold_num,
+                    compactRecommended: (($providers | length) >= $compact_threshold_num)
                 }
             }'
         ;;
