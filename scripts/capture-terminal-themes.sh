@@ -32,6 +32,11 @@ if [[ ! -x "${GHOSTTY_BIN}" ]]; then
     printf 'showy-bar: set SHOWY_BAR_CAPTURE_GHOSTTY_APP or SHOWY_BAR_CAPTURE_GHOSTTY_BIN to override it\n' >&2
     exit 1
 fi
+if [[ ! -d "${GHOSTTY_APP}" ]]; then
+    printf 'showy-bar: Ghostty app not found: %s\n' "${GHOSTTY_APP}" >&2
+    printf 'showy-bar: set SHOWY_BAR_CAPTURE_GHOSTTY_APP to the app bundle used by open(1)\n' >&2
+    exit 1
+fi
 if [[ ! -x "${BASH_BIN}" ]]; then
     BASH_BIN="$(command -v bash || true)"
 fi
@@ -110,10 +115,9 @@ ghostty_string() {
 
 palette_value() {
     local theme="$1" key="$2"
-    # shellcheck disable=SC2016
     SHOWY_BAR_THEME="${theme}" \
         SHOWY_BAR_NO_CONFIG=1 \
-        "${BASH_BIN}" -c '. ./lib/common.sh; showy_bar_palette "$1"' _ "${key}"
+        "${BASH_BIN}" -c '. "$1"; showy_bar_palette "$2"' _ "${REPO_ROOT}/lib/common.sh" "${key}"
 }
 
 write_command_script() {
