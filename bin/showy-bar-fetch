@@ -53,6 +53,7 @@ while (($#)); do
 done
 
 mkdir -p "${SHOWY_BAR_CACHE_DIR}"
+chmod 700 "${SHOWY_BAR_CACHE_DIR}" 2>/dev/null || true
 
 if [[ "${mode}" == "path" ]]; then
     printf '%s\n' "${SHOWY_BAR_USAGE_FILE}"
@@ -372,7 +373,7 @@ refresh_cache() {
         }
         mv "${tmp}" "${SHOWY_BAR_USAGE_FILE}"
         mv "${stamp_tmp}" "${SHOWY_BAR_USAGE_STAMP}"
-        chmod 644 "${SHOWY_BAR_USAGE_FILE}" "${SHOWY_BAR_USAGE_STAMP}" 2>/dev/null || true
+        chmod 600 "${SHOWY_BAR_USAGE_FILE}" "${SHOWY_BAR_USAGE_STAMP}" 2>/dev/null || true
         showy_bar_log "cache refreshed (${#out} bytes)"
         return 0
     fi

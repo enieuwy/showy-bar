@@ -4,6 +4,12 @@
 # This file is sourced by every script in bin/ and by the SketchyBar item +
 # plugin. It must stay self-contained: no external commands at load time.
 
+if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+    printf 'showy-bar: bash 4+ required (running %s). On macOS, install Homebrew bash and ensure it precedes /bin/bash on PATH.\n' "${BASH_VERSION:-unknown}" >&2
+    # shellcheck disable=SC2317
+    return 1 2>/dev/null || exit 1
+fi
+
 set -uo pipefail
 
 # ── config loading ─────────────────────────────────────────────────────
@@ -106,7 +112,7 @@ declare -gA SHOWY_BAR_ROLE_PALETTE_CACHE=()
 # ── small utilities ────────────────────────────────────────────────────
 
 showy_bar_log() {
-    [[ -n "${SHOWY_BAR_DEBUG:-}" ]] || return 0
+    [[ "${SHOWY_BAR_DEBUG:-0}" == "1" ]] || return 0
     printf '[showy-bar] %s\n' "$*" >&2
 }
 

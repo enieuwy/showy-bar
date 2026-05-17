@@ -28,6 +28,7 @@ export SHOWY_BAR_FORCE_COLOR=1
 showy_bar_have "${SHOWY_BAR_ZELLIJ_BIN}" || showy_bar_die "zellij is required for pipe mode: ${SHOWY_BAR_ZELLIJ_BIN}"
 
 interval="${SHOWY_BAR_ZELLIJ_PIPE_INTERVAL}"
+[[ "${interval}" =~ ^[0-9]+([.][0-9]+)?$ ]] || interval=10
 widget="${SHOWY_BAR_ZELLIJ_WIDGET}"
 pipe_name="${SHOWY_BAR_ZELLIJ_PIPE_NAME}"
 plugin="${SHOWY_BAR_ZELLIJ_PLUGIN}"
