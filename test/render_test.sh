@@ -142,6 +142,14 @@ exit 0
 EOF
 chmod +x "${stub_dir}/sketchybar"
 
+cat > "${stub_dir}/zellij" <<'EOF'
+#!/bin/sh
+log="${SHOWY_BAR_TEST_ZELLIJ_LOG:-/dev/null}"
+printf '%s\n' "$*" >> "${log}"
+exit 0
+EOF
+chmod +x "${stub_dir}/zellij"
+
 PASSED=0
 FAILED=0
 FAILURES=()
@@ -1282,6 +1290,27 @@ out=$(
 assert_contains "zellij stale absolute reset shows unknown countdown" "?" "${out}"
 assert_not_contains "zellij stale absolute reset does not show now" "now" "${out}"
 
+printf '\nzellij pipe helpers\n'
+cache=$(mk_cache)
+cp "${FIXTURE_DIR}/codexbar-mixed.json" "${cache}/usage.json"
+zellij_log="${TMP}/zellij-kick.log"
+rc=0
+out=$(
+    PATH="${stub_dir}:${PATH}" \
+    SHOWY_BAR_NO_CONFIG=1 \
+    SHOWY_BAR_CACHE_DIR="${cache}" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
+    SHOWY_BAR_ZELLIJ_PIPE_TIMEOUT_TENTHS=20 \
+    SHOWY_BAR_TEST_ZELLIJ_LOG="${zellij_log}" \
+    ZELLIJ_SESSION_NAME=test \
+    "${REPO_ROOT}/bin/showy-bar-zellij-kick" 2>/dev/null
+) || rc=$?
+if (( rc == 0 )); then
+    ok "zellij kick succeeds with session target"
+else
+    fail "zellij kick succeeds with session target" "rc=${rc}; out=${out}"
+fi
+assert_contains "zellij kick targets named session" "--session test pipe --name showy-bar -- zjstatus::pipe::pipe_showy_bar::" "$(< "${zellij_log}")"
 
 # 7. Concurrent fetch — only one codexbar invocation across simultaneous
 #    callers. We exercise both lock paths via SHOWY_BAR_FORCE_NO_FLOCK.

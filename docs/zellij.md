@@ -41,12 +41,13 @@ which crashes when `std::sync::Mutex::new()` runs on a single-threaded
 WASM target. The pipe feeder runs as an external background process:
 
 ```sh
-showy-bar-zellij-pipe
+ZELLIJ_SESSION_NAME=test showy-bar-zellij-pipe
 ```
 
 Start one feeder for each Zellij session (usually from the terminal wrapper
-that launches the session, with `ZELLIJ_SESSION_NAME` set). It re-emits the
-strip every `SHOWY_BAR_ZELLIJ_PIPE_INTERVAL` seconds; it does not watch
+that launches the session). `ZELLIJ_SESSION_NAME` targets updates at that
+session when the feeder runs outside Zellij. It re-emits the strip every
+`SHOWY_BAR_ZELLIJ_PIPE_INTERVAL` seconds; it does not watch
 Zellij session metadata or subscribe to tab events.
 
 New tab-local zjstatus instances start with empty pipe state until the next
@@ -54,7 +55,7 @@ feeder tick. For immediate paint after creating a tab or plugin, send a
 one-shot update:
 
 ```sh
-showy-bar-zellij-kick
+ZELLIJ_SESSION_NAME=test showy-bar-zellij-kick
 ```
 
 For new-tab bindings outside Zellij, prefer the convenience wrapper:

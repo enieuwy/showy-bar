@@ -30,6 +30,25 @@ pipe_name="${SHOWY_BAR_ZELLIJ_PIPE_NAME}"
 plugin="${SHOWY_BAR_ZELLIJ_PLUGIN}"
 pipe_timeout_tenths="${SHOWY_BAR_ZELLIJ_PIPE_TIMEOUT_TENTHS}"
 [[ "${pipe_timeout_tenths}" =~ ^[0-9]+$ ]] || pipe_timeout_tenths=20
+zellij_args=()
+if [[ -n "${ZELLIJ_SESSION_NAME:-}" ]]; then
+    zellij_args+=(--session "${ZELLIJ_SESSION_NAME}")
+fi
+
+
+reap_timed_out_pipe() {
+    local child="$1" waited=0
+    kill "${child}" 2>/dev/null || true
+    while kill -0 "${child}" 2>/dev/null; do
+        if (( waited >= 5 )); then
+            kill -KILL "${child}" 2>/dev/null || true
+            break
+        fi
+        sleep 0.1
+        waited=$((waited + 1))
+    done
+    wait "${child}" >/dev/null 2>&1 || true
+}
 
 send_pipe() {
     local payload="$1" child waited=0
@@ -39,12 +58,11 @@ send_pipe() {
     fi
     args+=(-- "${payload}")
 
-    "${SHOWY_BAR_ZELLIJ_BIN}" "${args[@]}" </dev/null >/dev/null 2>&1 &
+    "${SHOWY_BAR_ZELLIJ_BIN}" "${zellij_args[@]}" "${args[@]}" </dev/null >/dev/null 2>&1 &
     child=$!
     while kill -0 "${child}" 2>/dev/null; do
         if (( waited >= pipe_timeout_tenths )); then
-            kill "${child}" 2>/dev/null || true
-            wait "${child}" 2>/dev/null || true
+            reap_timed_out_pipe "${child}"
             return 1
         fi
         sleep 0.1

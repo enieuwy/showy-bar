@@ -53,7 +53,7 @@ while (($#)); do
     shift
 done
 
-# ── caps ──────────────────────────────────────────────────────────────────
+# ── caps ────────────────────────────────────────────────────────────
 #
 # Powerline-Extra glyphs by default (U+E0B6 / U+E0B4); requires a Nerd
 # Font or any font with the Powerline Extra range. Override or blank
