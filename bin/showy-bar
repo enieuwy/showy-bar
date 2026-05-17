@@ -26,7 +26,7 @@ THEME_NAME_RE='^[A-Za-z0-9._-]+$'
 
 usage() {
     printf '%s\n' \
-        'Usage: showy-bar [--set <name>|--unset|--current|--list|--preview <name>]' \
+        'Usage: showy-bar [--set <name>|--unset|--current|--list|--preview <name>|--diagnose]' \
         '' \
         'With no flags, opens an interactive theme selector when fzf and a TTY are available.' \
         'Without fzf or a TTY, prints a deterministic theme list and exact set/unset commands.' \
@@ -37,6 +37,7 @@ usage() {
         '  --current         Print the persisted theme name, or (none)' \
         '  --list            Print available theme names, one per line' \
         '  --preview <name>  Print one ANSI preview strip for a theme' \
+        '  --diagnose        Print runtime state useful for bug reports' \
         '  -h, --help        Show this help'
 }
 
@@ -302,6 +303,116 @@ preview_theme() {
         "${RENDERER}" --json - < <(preview_fixture_json)
 }
 
+print_tool_path() {
+    local name="$1" path
+    if path=$(command -v "${name}" 2>/dev/null); then
+        printf '  %-12s %s\n' "${name}" "${path}"
+    else
+        printf '  %-12s (missing)\n' "${name}"
+    fi
+}
+
+diagnose() {
+    local fetch_bin state_bin cache_path cache_age
+    fetch_bin="${SCRIPT_DIR}/showy-bar-fetch"
+    state_bin="${SCRIPT_DIR}/showy-bar-state"
+
+    printf '## showy-bar diagnose\n'
+    printf 'showy-bar:    %s\n' "${SCRIPT_PATH}"
+    printf 'repo root:    %s\n' "${REPO_ROOT}"
+    printf 'bash:         %s\n' "${BASH_VERSION:-unknown}"
+    printf 'uname:        %s\n' "$(uname -srm 2>/dev/null || printf 'unknown')"
+
+    printf '\n# Required tools\n'
+    print_tool_path bash
+    print_tool_path jq
+    print_tool_path codexbar
+    printf '\n# Optional tools\n'
+    print_tool_path curl
+    print_tool_path flock
+    print_tool_path sketchybar
+    print_tool_path magick
+    print_tool_path zellij
+    print_tool_path tmux
+    print_tool_path fzf
+
+    printf '\n# Config\n'
+    if [[ -r "${CONFIG_FILE}" ]]; then
+        printf 'config:       %s (readable)\n' "${CONFIG_FILE}"
+    elif [[ -e "${CONFIG_FILE}" ]]; then
+        printf 'config:       %s (exists, unreadable)\n' "${CONFIG_FILE}"
+    else
+        printf 'config:       %s (none — defaults in effect)\n' "${CONFIG_FILE}"
+    fi
+    printf 'theme:        %s\n' "$(current_theme_value 2>/dev/null || printf '(none)')"
+
+    printf '\n# Cache\n'
+    if [[ -x "${fetch_bin}" ]]; then
+        cache_path="$("${fetch_bin}" --path 2>/dev/null || printf '(unknown)')"
+        cache_age="$("${fetch_bin}" --age 2>/dev/null || printf '(unknown)')"
+        printf 'cache file:   %s\n' "${cache_path}"
+        printf 'cache age:    %ss\n' "${cache_age}"
+        if [[ -f "${cache_path}" ]]; then
+            printf 'cache size:   %s bytes\n' "$(wc -c < "${cache_path}" 2>/dev/null | tr -d ' ' || printf 'unknown')"
+        else
+            printf 'cache size:   (file absent)\n'
+        fi
+    else
+        printf 'cache:        showy-bar-fetch missing or non-executable: %s\n' "${fetch_bin}"
+    fi
+
+    printf '\n# State\n'
+    if [[ -x "${state_bin}" ]]; then
+        "${state_bin}" 2>&1 | sed 's/^/  /'
+    else
+        printf '  showy-bar-state missing or non-executable: %s\n' "${state_bin}"
+    fi
+
+    printf '\n# Env knobs (set values only)\n'
+    local var
+    for var in \
+        SHOWY_BAR_REFRESH_SECONDS \
+        SHOWY_BAR_LOCK_WAIT_TENTHS \
+        SHOWY_BAR_CACHE_DIR \
+        SHOWY_BAR_CODEXBAR_BIN \
+        SHOWY_BAR_CODEXBAR_SERVE_URL \
+        SHOWY_BAR_CODEXBAR_SERVE_TIMEOUT_SECONDS \
+        SHOWY_BAR_PROVIDERS \
+        SHOWY_BAR_PROVIDERS_EXCLUDE \
+        SHOWY_BAR_PROVIDER_ORDER \
+        SHOWY_BAR_INCLUDE_STATUS \
+        SHOWY_BAR_THEME \
+        SHOWY_BAR_TIME_WARN_MINUTES \
+        SHOWY_BAR_DEBUG \
+        SHOWY_BAR_FORCE_COLOR \
+        SHOWY_BAR_NO_CONFIG \
+        SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE \
+        SHOWY_BAR_ZELLIJ_WIDGET \
+        SHOWY_BAR_ZELLIJ_PIPE_INTERVAL \
+        SHOWY_BAR_ZELLIJ_BIN
+    do
+        if [[ -n "${!var:-}" ]]; then
+            printf '  %s=%s\n' "${var}" "${!var}"
+        fi
+    done
+
+    printf '\n# CodexBar probe\n'
+    local cb="${SHOWY_BAR_CODEXBAR_BIN:-codexbar}"
+    if ! command -v "${cb}" >/dev/null 2>&1; then
+        printf 'codexbar binary not on PATH (set SHOWY_BAR_CODEXBAR_BIN or install codexbar)\n'
+    elif ! command -v jq >/dev/null 2>&1; then
+        printf 'codexbar present; jq missing — cannot count providers\n'
+    elif [[ -f "${SHOWY_BAR_USAGE_FILE:-${HOME}/.cache/showy-bar/usage.json}" ]]; then
+        local cache_file count
+        cache_file="${SHOWY_BAR_USAGE_FILE:-${HOME}/.cache/showy-bar/usage.json}"
+        count=$(jq 'length' "${cache_file}" 2>/dev/null || printf '?')
+        printf 'cached provider count = %s (from %s)\n' "${count}" "${cache_file}"
+        printf '(skipping live %s usage probe; rerun bin/showy-bar-fetch --refresh to refresh)\n' "${cb}"
+    else
+        printf 'no cache yet; run bin/showy-bar-fetch --refresh to populate, then re-run --diagnose\n'
+    fi
+}
+
 main() {
     if (($# == 0)); then
         run_selector
@@ -328,6 +439,10 @@ main() {
         --preview)
             (($# == 2)) || usage_error '--preview requires exactly one theme name'
             preview_theme "$2"
+            ;;
+        --diagnose)
+            (($# == 1)) || usage_error '--diagnose does not accept arguments'
+            diagnose
             ;;
         -h|--help)
             (($# == 1)) || usage_error '--help does not accept arguments'

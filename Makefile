@@ -17,14 +17,17 @@ FORCE         ?= 0
 REPO          := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BIN_NAMES     := showy-bar-fetch showy-bar-state showy-bar showy-bar-tmux-bar showy-bar-zellij-bar showy-bar-zellij-pipe showy-bar-zellij-kick showy-bar-zellij-new-tab
 
-.PHONY: help install install-bin install-sketchybar install-all uninstall test lint clean
+.PHONY: help doctor diagnose install install-bin install-sketchybar install-all uninstall test lint clean
 
 help: ## Show this help.
 	@awk 'BEGIN{FS=":.*##"}/^[a-zA-Z_-]+:.*##/{printf "  \033[36m%-20s\033[0m %s\n",$$1,$$2}' $(MAKEFILE_LIST)
 
-install: install-bin ## Symlink shared scripts into the user's standard bin path.
+install: doctor install-bin ## Check prerequisites, then symlink shared scripts.
 	@printf '\nInstalled shared showy-bar scripts into $(BIN_DIR).\n'
-	@printf 'SketchyBar is opt-in: run `make install-sketchybar`, then source "$$ITEM_DIR/showy_bar.sh".\n'
+	@printf 'Nothing is wired to a bar yet. Run one of:\n'
+	@printf '  make install-sketchybar      # then `source "$$ITEM_DIR/showy_bar.sh"`\n'
+	@printf '  cat tmux/status-line.tmux.fragment\n'
+	@printf '  cat zellij/layout-pane.kdl.fragment\n'
 
 install-bin:
 	@mkdir -p "$(BIN_DIR)"
@@ -105,6 +108,23 @@ uninstall: ## Remove symlinks that this Makefile created.
 
 test: ## Run the smoke-test suite against fixtures (no live codexbar).
 	@$(REPO)/test/render_test.sh
+
+doctor: ## Check runtime prerequisites without touching the system.
+	@bash -c '(( BASH_VERSINFO[0] >= 4 ))' || { \
+		printf 'showy-bar: bash 4+ required. macOS /bin/bash is 3.2; install Homebrew bash.\n' >&2; exit 1; }
+	@command -v jq >/dev/null || { \
+		printf 'showy-bar: jq is required (brew install jq / apt-get install jq).\n' >&2; exit 1; }
+	@command -v codexbar >/dev/null || { \
+		printf 'showy-bar: codexbar is required and must be on PATH.\n' >&2; \
+		printf '  macOS app:   brew install --cask steipete/tap/codexbar\n' >&2; \
+		printf '  CLI tarball: https://github.com/steipete/CodexBar/releases\n' >&2; exit 1; }
+	@printf 'doctor: bash %s, jq %s, codexbar %s — ok\n' \
+		"$$(bash --version | head -n1 | awk '{print $$4}')" \
+		"$$(jq --version)" \
+		"$$(command -v codexbar)"
+
+diagnose: ## Print runtime state useful for bug reports.
+	@$(REPO)/bin/showy-bar --diagnose
 
 lint: ## Run shellcheck if available.
 	@if command -v shellcheck >/dev/null 2>&1; then \
