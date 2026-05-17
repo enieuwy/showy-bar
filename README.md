@@ -1,13 +1,14 @@
 # showy-bar
 
 Always-on AI coding-quota strips for **SketchyBar**, **Zellij**, and **tmux**,
-driven entirely by the [CodexBar](https://github.com/steipete/CodexBar) CLI.
+driven by [CodexBar](https://github.com/steipete/CodexBar) CLI JSON or its
+localhost `codexbar serve` endpoint.
 
 CodexBar handles every provider's auth, cookies, OAuth, parsing, and caching.
 This repo's only job is to render its JSON in three places:
 
 ```
-codexbar usage --format json
+codexbar usage --format json     or     codexbar serve → http://127.0.0.1:8080/usage
        │
        ▼
 bin/showy-bar-fetch     ←  shared cache + flock + last-known-good
@@ -18,8 +19,9 @@ bin/showy-bar-fetch     ←  shared cache + flock + last-known-good
        └──► bin/showy-bar-tmux-bar             (tmux #[…] markup for status-right)
 ```
 
-No sidecar, no daemon, no provider auth code, no extra config beyond a
-single optional env file.
+No provider auth code, no extra config beyond a single optional env file. By
+default, showy-bar probes `http://127.0.0.1:8080/usage` for `codexbar serve`
+and falls back to spawning the CLI on refresh.
 
 ## Requirements
 
@@ -44,6 +46,8 @@ single optional env file.
   them. tmux uses only Unicode Block Elements and needs no special font.
 - Optional: `flock` for inter-process locking; falls back to an owner-scoped
   `mkdir` lock when missing.
+- Optional: `curl` for the default `codexbar serve` probe; without it,
+  showy-bar falls back to the CLI path.
 
 In `SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE=font`, mapped providers use
 `sketchybar-app-font` glyphs and the rest fall back to CodexBar's bundled SVGs
@@ -93,8 +97,8 @@ Three pieces:
    default layout. It declares the visible `zjstatus` pipe widget only.
    Install `zjstatus.wasm` first; see [`docs/zellij.md`](docs/zellij.md).
 2. **Pipe loop** — start `showy-bar-zellij-pipe` for each Zellij session
-   (for example from the terminal wrapper that launches the session, with
-   `ZELLIJ_SESSION_NAME` set).
+   (for example, `ZELLIJ_SESSION_NAME=test showy-bar-zellij-pipe` from the
+   terminal wrapper that launches the session).
 3. **Detail keybind** — paste `zellij/detail-pane.kdl.fragment` into your
    keybinds block. Default is `Alt /`.
 
@@ -158,6 +162,8 @@ Useful knobs:
 | Variable                          | Default                                | Effect                                                |
 |-----------------------------------|----------------------------------------|-------------------------------------------------------|
 | `SHOWY_BAR_REFRESH_SECONDS`         | `120`                                  | Upper bound on how often `codexbar` itself is invoked |
+| `SHOWY_BAR_CODEXBAR_SERVE_URL`    | `http://127.0.0.1:8080`                | Localhost base URL for `codexbar serve`; set empty to skip the HTTP probe |
+| `SHOWY_BAR_CODEXBAR_SERVE_TIMEOUT_SECONDS` | `0.5`                         | HTTP timeout for the default `codexbar serve` fetch path |
 | `SHOWY_BAR_PROVIDERS`               | empty (render CodexBar's enabled providers) | Ordered comma-list allow-list, e.g. `codex,claude`   |
 | `SHOWY_BAR_PROVIDERS_EXCLUDE`       | empty                                  | Comma-list exclude-list applied after the allow-list  |
 | `SHOWY_BAR_PROVIDER_ORDER`          | `codex,claude,opencode,gemini`         | Stable render order without filtering; missing providers are skipped |

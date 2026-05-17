@@ -53,6 +53,36 @@ cat "${SHOWY_BAR_TEST_FIXTURE}"
 EOF
 chmod +x "${stub_dir}/codexbar"
 
+cat > "${stub_dir}/curl" <<'EOF'
+#!/bin/sh
+[ -n "${SHOWY_BAR_TEST_SERVE_FIXTURE:-}" ] || exit 88
+url=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --fail|--silent|--show-error)
+            ;;
+        --max-time)
+            shift
+            case "${1:-}" in
+                ""|*[!0-9.]*)
+                    exit 89
+                    ;;
+            esac
+            ;;
+        http://*)
+            url="$1"
+            ;;
+        *)
+            exit 90
+            ;;
+    esac
+    shift
+done
+[ "${url}" = "${SHOWY_BAR_TEST_SERVE_URL%/}/usage" ] || exit 91
+cat "${SHOWY_BAR_TEST_SERVE_FIXTURE}"
+EOF
+chmod +x "${stub_dir}/curl"
+
 # Stub sketchybar with enough statefulness for plugin lifecycle tests.
 cat > "${stub_dir}/sketchybar" <<'EOF'
 #!/bin/sh
@@ -673,6 +703,7 @@ out=$(
     SHOWY_BAR_NO_CONFIG=1 \
     SHOWY_BAR_CACHE_DIR="${state_missing_cache}" \
     SHOWY_BAR_CODEXBAR_BIN="${TMP}/no-such-codexbar-state" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
     "${REPO_ROOT}/bin/showy-bar-state"
 )
 assert_equals "state reports unavailable without cache" "false" "$(printf '%s' "${out}" | jq -r '.available')"
@@ -1018,6 +1049,7 @@ out=$(
     SHOWY_BAR_NO_CONFIG=1 \
     SHOWY_BAR_CACHE_DIR="${cache}" \
     SHOWY_BAR_CODEXBAR_BIN="${missing_bin:-${TMP}/no-such-codexbar}" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
     "${REPO_ROOT}/bin/showy-bar-fetch" 2>/dev/null
 ) || rc=$?
 if (( rc != 0 )) && [[ -z "${out}" ]]; then
@@ -1051,12 +1083,126 @@ out=$(
     SHOWY_BAR_NO_CONFIG=1 \
     SHOWY_BAR_CACHE_DIR="${cache}" \
     SHOWY_BAR_CODEXBAR_BIN="${missing_bin}" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
     "${REPO_ROOT}/bin/showy-bar-fetch" 2>&1
 ) || rc=$?
 if (( rc != 0 )); then
     ok "fetcher fails when codexbar missing and cache empty"
 else
     fail "fetcher fails when codexbar missing and cache empty"
+fi
+
+cache=$(mk_cache)
+rc=0
+serve_url="http://127.0.0.1:8080"
+out=$(
+    PATH="${stub_dir}:${PATH}" \
+    SHOWY_BAR_NO_CONFIG=1 \
+    SHOWY_BAR_CACHE_DIR="${cache}" \
+    SHOWY_BAR_CODEXBAR_BIN="${missing_bin}" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
+    SHOWY_BAR_TEST_SERVE_URL="${serve_url}" \
+    SHOWY_BAR_TEST_SERVE_FIXTURE="${FIXTURE_DIR}/codexbar-realistic.json" \
+    "${REPO_ROOT}/bin/showy-bar-fetch" 2>/dev/null
+) || rc=$?
+if (( rc != 0 )) && [[ -z "${out}" ]] && ! [[ -f "${cache}/usage.json" ]]; then
+    ok "fetcher empty serve URL disables default HTTP probe"
+else
+    fail "fetcher empty serve URL disables default HTTP probe" "rc=${rc}; out=${out}"
+fi
+
+# 4b. codexbar serve can refresh the cache without invoking the CLI binary.
+cache=$(mk_cache)
+rc=0
+serve_url="http://127.0.0.1:18080"
+out=$(
+    PATH="${stub_dir}:${PATH}" \
+    SHOWY_BAR_NO_CONFIG=1 \
+    SHOWY_BAR_CACHE_DIR="${cache}" \
+    SHOWY_BAR_CODEXBAR_BIN="${missing_bin}" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL="${serve_url}" \
+    SHOWY_BAR_TEST_SERVE_URL="${serve_url}" \
+    SHOWY_BAR_TEST_SERVE_FIXTURE="${FIXTURE_DIR}/codexbar-realistic.json" \
+    "${REPO_ROOT}/bin/showy-bar-fetch" 2>/dev/null
+) || rc=$?
+if (( rc == 0 )) && printf '%s' "${out}" | jq -e 'type == "array" and any(.provider == "codex")' >/dev/null 2>&1; then
+    ok "fetcher reads codexbar serve usage endpoint"
+else
+    fail "fetcher reads codexbar serve usage endpoint" "rc=${rc}; out=${out}"
+fi
+
+# 4c. A non-CodexBar service on the default port must not block CLI fallback.
+cache=$(mk_cache)
+rc=0
+out=$(
+    PATH="${stub_dir}:${PATH}" \
+    SHOWY_BAR_NO_CONFIG=1 \
+    SHOWY_BAR_CACHE_DIR="${cache}" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL="${serve_url}" \
+    SHOWY_BAR_TEST_SERVE_URL="${serve_url}" \
+    SHOWY_BAR_TEST_SERVE_FIXTURE="${FIXTURE_DIR}/codexbar-non-array.json" \
+    SHOWY_BAR_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-realistic.json" \
+    "${REPO_ROOT}/bin/showy-bar-fetch" 2>/dev/null
+) || rc=$?
+if (( rc == 0 )) && printf '%s' "${out}" | jq -e 'type == "array" and any(.provider == "claude")' >/dev/null 2>&1; then
+    ok "fetcher falls back when serve returns non-array JSON"
+else
+    fail "fetcher falls back when serve returns non-array JSON" "rc=${rc}; out=${out}"
+fi
+
+cache=$(mk_cache)
+rc=0
+out=$(
+    PATH="${stub_dir}:${PATH}" \
+    SHOWY_BAR_NO_CONFIG=1 \
+    SHOWY_BAR_CACHE_DIR="${cache}" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL="${serve_url}" \
+    SHOWY_BAR_TEST_SERVE_URL="${serve_url}" \
+    SHOWY_BAR_TEST_SERVE_FIXTURE="${FIXTURE_DIR}/codexbar-empty.json" \
+    SHOWY_BAR_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-realistic.json" \
+    "${REPO_ROOT}/bin/showy-bar-fetch" 2>/dev/null
+) || rc=$?
+if (( rc == 0 )) && printf '%s' "${out}" | jq -e 'type == "array" and any(.provider == "codex")' >/dev/null 2>&1; then
+    ok "fetcher falls back when serve returns no renderable providers"
+else
+    fail "fetcher falls back when serve returns no renderable providers" "rc=${rc}; out=${out}"
+fi
+
+cache=$(mk_cache)
+rc=0
+out=$(
+    PATH="${stub_dir}:${PATH}" \
+    SHOWY_BAR_NO_CONFIG=1 \
+    SHOWY_BAR_CACHE_DIR="${cache}" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL="${serve_url}" \
+    SHOWY_BAR_TEST_SERVE_URL="${serve_url}" \
+    SHOWY_BAR_TEST_SERVE_FIXTURE="${bad_provider}" \
+    SHOWY_BAR_TEST_FIXTURE="${FIXTURE_DIR}/codexbar-realistic.json" \
+    "${REPO_ROOT}/bin/showy-bar-fetch" 2>/dev/null
+) || rc=$?
+if (( rc == 0 )) && printf '%s' "${out}" | jq -e 'type == "array" and any(.provider == "claude")' >/dev/null 2>&1; then
+    ok "fetcher falls back when serve fails publish validation"
+else
+    fail "fetcher falls back when serve fails publish validation" "rc=${rc}; out=${out}"
+fi
+
+cache=$(mk_cache)
+rc=0
+userinfo_url="http://127.0.0.1:18080@example.com"
+out=$(
+    PATH="${stub_dir}:${PATH}" \
+    SHOWY_BAR_NO_CONFIG=1 \
+    SHOWY_BAR_CACHE_DIR="${cache}" \
+    SHOWY_BAR_CODEXBAR_BIN="${missing_bin}" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL="${userinfo_url}" \
+    SHOWY_BAR_TEST_SERVE_URL="${userinfo_url}" \
+    SHOWY_BAR_TEST_SERVE_FIXTURE="${FIXTURE_DIR}/codexbar-realistic.json" \
+    "${REPO_ROOT}/bin/showy-bar-fetch" 2>/dev/null
+) || rc=$?
+if (( rc != 0 )) && [[ -z "${out}" ]] && ! [[ -f "${cache}/usage.json" ]]; then
+    ok "fetcher rejects serve URL userinfo host spoofing"
+else
+    fail "fetcher rejects serve URL userinfo host spoofing" "rc=${rc}; out=${out}"
 fi
 
 # 5. Missing codexbar binary, but stale cache exists → serve stale.
@@ -1068,6 +1214,7 @@ out=$(
     SHOWY_BAR_NO_CONFIG=1 \
     SHOWY_BAR_CACHE_DIR="${cache}" \
     SHOWY_BAR_CODEXBAR_BIN="${missing_bin}" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
     "${REPO_ROOT}/bin/showy-bar-fetch" 2>/dev/null
 ) || rc=$?
 if (( rc == 0 )) && printf '%s' "${out}" | jq -e 'type == "array"' >/dev/null 2>&1; then
@@ -1094,6 +1241,7 @@ out=$(
     SHOWY_BAR_NO_CONFIG=1 \
     SHOWY_BAR_CACHE_DIR="${cache}" \
     SHOWY_BAR_CODEXBAR_BIN="${TMP}/no-such-codexbar" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
     SHOWY_BAR_FORCE_COLOR=1 \
     "${REPO_ROOT}/bin/showy-bar-zellij-bar"
 )
@@ -1111,6 +1259,7 @@ out=$(
     SHOWY_BAR_NO_CONFIG=1 \
     SHOWY_BAR_CACHE_DIR="${cache}" \
     SHOWY_BAR_CODEXBAR_BIN="${TMP}/no-such-codexbar" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
     "${REPO_ROOT}/bin/showy-bar-tmux-bar"
 )
 assert_not_contains "tmux does not dim stale cache" "#[dim]" "${out}"
@@ -1126,11 +1275,13 @@ out=$(
     SHOWY_BAR_NO_CONFIG=1 \
     SHOWY_BAR_CACHE_DIR="${cache}" \
     SHOWY_BAR_CODEXBAR_BIN="${TMP}/no-such-codexbar" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
     SHOWY_BAR_FORCE_COLOR=1 \
     "${REPO_ROOT}/bin/showy-bar-zellij-bar"
 )
 assert_contains "zellij stale absolute reset shows unknown countdown" "?" "${out}"
 assert_not_contains "zellij stale absolute reset does not show now" "now" "${out}"
+
 
 # 7. Concurrent fetch — only one codexbar invocation across simultaneous
 #    callers. We exercise both lock paths via SHOWY_BAR_FORCE_NO_FLOCK.

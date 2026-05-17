@@ -46,6 +46,8 @@ showy_bar_load_config
 : "${SHOWY_BAR_LOCK_WAIT_TENTHS:=100}"
 : "${SHOWY_BAR_CACHE_DIR:=${XDG_CACHE_HOME:-${HOME}/.cache}/showy-bar}"
 : "${SHOWY_BAR_CODEXBAR_BIN:=codexbar}"
+: "${SHOWY_BAR_CODEXBAR_SERVE_URL=http://127.0.0.1:8080}"
+: "${SHOWY_BAR_CODEXBAR_SERVE_TIMEOUT_SECONDS:=0.5}"
 : "${SHOWY_BAR_PROVIDERS:=}"
 : "${SHOWY_BAR_PROVIDERS_EXCLUDE:=}"
 : "${SHOWY_BAR_PROVIDER_ORDER:=codex,claude,opencode,gemini}"

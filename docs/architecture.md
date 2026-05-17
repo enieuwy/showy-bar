@@ -3,7 +3,9 @@
 `showy-bar` is intentionally tiny. There are three layers:
 
 1. **Data plane.** A single shell script, `bin/showy-bar-fetch`, owns the
-   on-disk cache and is the only renderer path that invokes `codexbar`.
+   on-disk cache and is the only renderer path that talks to CodexBar. By
+   default it probes `codexbar serve` at localhost `/usage`, then falls back to
+   invoking `codexbar usage --format json` directly.
 2. **Renderers / state surfaces.** Independent scripts that read the cache and
    emit format-specific output or stable integration state:
    - `bin/showy-bar-state` → provider/layout state JSON for external coordinators
@@ -15,9 +17,9 @@
 
 ```
                 ┌─────────────────────────────────────────────┐
-                │       codexbar usage --format json        │
-                └──────────────────────────┬──────────────────┘
-                                           │ (slow; 1–10 s cold)
+                │ codexbar usage --format json │  or  │ codexbar serve /usage │
+                └──────────────────────────┬─────────────────────────────────┘
+                                           │ (slow CLI cold; cheap server hit)
                                            ▼
                 ┌─────────────────────────────────────────────┐
                 │   bin/showy-bar-fetch (flock + atomic write)  │
@@ -47,6 +49,13 @@ The fetcher prints the cache content to stdout regardless of whether it
 just refreshed or served stale bytes. Callers must not differentiate; if
 they want freshness data they read `--age`.
 
+Refreshes try `${SHOWY_BAR_CODEXBAR_SERVE_URL%/}/usage` first with `curl`; the
+default base URL is `http://127.0.0.1:8080`. Set
+`SHOWY_BAR_CODEXBAR_SERVE_URL=` to skip the HTTP probe. Connection failures,
+non-local URLs, missing `curl`, non-array HTTP payloads, or arrays with no
+renderable usage providers fall back to the CLI path. The same on-disk
+validation and last-known-good semantics still gate publication.
+
 The tmux and Zellij detail panes source showy-bar config when present, then
 run `${SHOWY_BAR_CODEXBAR_BIN:-codexbar} usage` directly because they display
 CodexBar's text UI, not the compact cache-backed renderer output.
@@ -55,10 +64,11 @@ CodexBar's text UI, not the compact cache-backed renderer output.
 
 | Condition                                     | Outcome                                              |
 |-----------------------------------------------|------------------------------------------------------|
-| `codexbar` not on PATH                        | First run errors; subsequent runs serve stale cache  |
-| `codexbar` returns non-JSON                   | Cache is **not** updated; previous value still served|
-| `codexbar` JSON fails `jq` validation         | Same — preserve last good cache                      |
-| Cache file missing **and** `codexbar` fails   | Fetcher exits non-zero; renderers print `AI ?`       |
+| `codexbar` not on PATH and no serve URL       | First run errors; subsequent runs serve stale cache  |
+| `codexbar serve` unavailable or not renderable | Fetcher falls back to CLI, then existing stale cache |
+| CodexBar CLI returns non-JSON               | Cache is **not** updated; previous value still served|
+| CodexBar JSON fails `jq` validation           | Same — preserve last good cache                      |
+| Cache file missing and every refresh path fails | Fetcher exits non-zero; renderers print `AI ?`     |
 | Cache age > `2 × SHOWY_BAR_REFRESH_SECONDS`     | Zellij + tmux dim every provider; SketchyBar unchanged |
 
 ## Why bash and not Python/Go/Rust

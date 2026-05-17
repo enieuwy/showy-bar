@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # showy-bar — shared CodexBar JSON fetcher.
 #
-# Returns cached `codexbar usage --format json` output.
+# Returns cached CodexBar usage JSON.
 # Refreshes the cache when older than SHOWY_BAR_REFRESH_SECONDS, atomically.
-# Always prints the most recent good cache when codexbar fails.
+# Refreshes read /usage from the default localhost `codexbar serve` endpoint
+# first; set SHOWY_BAR_CODEXBAR_SERVE_URL= to skip the HTTP probe.
+# Always prints the most recent good cache when refresh fails.
 #
 # Exit 0 whenever any cache content was emitted (fresh or stale).
 # Exit 1 only when no cache exists and the first fetch fails.
@@ -270,12 +272,72 @@ showy_bar_wait_for_cache() {
 
 # ── core refresh ──────────────────────────────────────────────────────
 
-run_codexbar() {
+run_codexbar_serve() {
+    [[ -n "${SHOWY_BAR_CODEXBAR_SERVE_URL}" ]] || return 127
+    showy_bar_have curl || {
+        showy_bar_log "curl not found for codexbar serve URL"
+        return 127
+    }
+
+    local base timeout
+    base="${SHOWY_BAR_CODEXBAR_SERVE_URL%/}"
+    if ! [[ "${base}" =~ ^http://(127[.]0[.]0[.]1|localhost|\[::1\])(:[0-9]+)?$ ]]; then
+        showy_bar_log "ignoring non-local codexbar serve URL: ${SHOWY_BAR_CODEXBAR_SERVE_URL}"
+        return 127
+    fi
+
+    timeout="${SHOWY_BAR_CODEXBAR_SERVE_TIMEOUT_SECONDS}"
+    [[ "${timeout}" =~ ^[0-9]+([.][0-9]+)?$ ]] || timeout=0.5
+    curl --fail --silent --show-error --max-time "${timeout}" "${base}/usage" 2>/dev/null
+}
+
+serve_payload_is_publishable() {
+    jq -e '
+        type == "array"
+        and all(.[]; type == "object"
+            and (.provider | type == "string" and test("^[A-Za-z0-9_.-]+$"))
+            and (
+                (.usage // null) == null
+                or (
+                    (.usage | type) == "object"
+                    and all([.usage.primary, .usage.secondary, .usage.tertiary][];
+                        . == null
+                        or (type == "object" and (.usedPercent | type) == "number")
+                    )
+                )
+            )
+        )
+        and any(.[]?;
+            (.provider? | type == "string" and length > 0)
+            and (.usage?.primary?.usedPercent? | type == "number")
+        )
+    ' >/dev/null 2>&1 <<< "$1"
+}
+
+run_codexbar_cli() {
+    if ! command -v "${SHOWY_BAR_CODEXBAR_BIN}" >/dev/null 2>&1; then
+        showy_bar_log "codexbar binary not found: ${SHOWY_BAR_CODEXBAR_BIN}"
+        return 127
+    fi
+
     local args=(usage --format json --pretty)
     if [[ "${SHOWY_BAR_INCLUDE_STATUS}" == "1" ]]; then
         args+=(--status)
     fi
     "${SHOWY_BAR_CODEXBAR_BIN}" "${args[@]}" 2>/dev/null
+}
+
+run_codexbar() {
+    local out
+    if [[ -n "${SHOWY_BAR_CODEXBAR_SERVE_URL}" ]]; then
+        if out=$(run_codexbar_serve) && serve_payload_is_publishable "${out}"; then
+            printf '%s' "${out}"
+            return 0
+        fi
+        showy_bar_log "codexbar serve fetch failed or returned no renderable usage; falling back to CLI"
+    fi
+
+    run_codexbar_cli
 }
 
 refresh_cache() {
@@ -284,11 +346,7 @@ refresh_cache() {
         showy_bar_log "could not create temporary cache file"
         return 1
     fi
-    if ! command -v "${SHOWY_BAR_CODEXBAR_BIN}" >/dev/null 2>&1; then
-        rm -f "${tmp}"
-        showy_bar_log "codexbar binary not found: ${SHOWY_BAR_CODEXBAR_BIN}"
-        return 1
-    fi
+
 
     rc=0
     out=$(run_codexbar) || rc=$?

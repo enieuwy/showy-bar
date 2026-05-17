@@ -2,8 +2,9 @@
 
 ## What gets added
 
-Per provider in the filtered render set (`codexbar usage --format json`
-after `SHOWY_BAR_PROVIDERS` / `SHOWY_BAR_PROVIDERS_EXCLUDE` are applied):
+Per provider in the filtered render set (CodexBar usage JSON from the default
+localhost `codexbar serve` probe or CLI fallback, after `SHOWY_BAR_PROVIDERS` /
+`SHOWY_BAR_PROVIDERS_EXCLUDE` are applied):
 
 - `showy_bar.<provider>.icon` — provider icon (`sketchybar-app-font` when
   mapped, CodexBar SVG/PNG fallback otherwise)
