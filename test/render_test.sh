@@ -872,7 +872,22 @@ log="${TMP}/sb-add.log"
 run_sketchybar_plugin codexbar-mixed.json "${cache}" "${log}"
 plugin_log="$(< "${log}")"
 assert_contains "plugin adds newly visible provider" "--add item showy_bar.gemini.label left" "${plugin_log}"
-assert_not_contains "plugin does not re-add declared providers" "--add item showy_bar.codex.label left" "${plugin_log}"
+# When the desired set changes, the plugin tears down and re-adds every
+# provider so SketchyBar lays them out in desired_providers order. The
+# previous incremental path appended the new provider at the end, which
+# placed late-arriving providers (e.g. antigravity opening mid-session)
+# to the right of providers that sort before them.
+add_codex_before_gemini=$(printf '%s' "${plugin_log}" \
+    | grep -n -F -- '--add item showy_bar.codex.label left' | head -n1 | cut -d: -f1)
+add_gemini_label=$(printf '%s' "${plugin_log}" \
+    | grep -n -F -- '--add item showy_bar.gemini.label left' | head -n1 | cut -d: -f1)
+if [[ -n "${add_codex_before_gemini}" && -n "${add_gemini_label}" \
+    && "${add_codex_before_gemini}" -lt "${add_gemini_label}" ]]; then
+    ok "plugin re-adds declared providers ahead of new providers in sort order"
+else
+    fail "plugin re-adds declared providers ahead of new providers in sort order" \
+        "codex line=${add_codex_before_gemini} gemini line=${add_gemini_label}"
+fi
 assert_contains "plugin rebuilds bracket with added native provider" "showy_bar.gemini.icon showy_bar.gemini.primary showy_bar.gemini.secondary showy_bar.gemini.tertiary showy_bar.gemini.secondary_marker showy_bar.gemini.tertiary_marker showy_bar.gemini.slot showy_bar.gemini.label --set showy_bar_bracket" "${plugin_log}"
 assert_contains "plugin triggers provider-change event" "--trigger showy_bar_provider_change SHOWY_BAR_PROVIDER_COUNT=3 SHOWY_BAR_PROVIDERS=codex,claude,gemini" "${plugin_log}"
 
@@ -906,6 +921,35 @@ assert_not_contains "plugin unchanged set skips bracket rebuild" "--add bracket 
 assert_not_contains "plugin unchanged set skips provider removals" "--remove showy_bar." "${plugin_log}"
 assert_not_contains "plugin unchanged set skips bracket removal" "--remove showy_bar_bracket" "${plugin_log}"
 assert_contains "plugin unchanged set still updates providers" "--set showy_bar.claude.label" "${plugin_log}"
+
+# Regression: a newly-visible provider that sorts before an existing one
+# (the antigravity-opened-mid-session case) must end up to the *left* of
+# the later-sorting provider on the bar, not appended at the end.
+late_arrival_fixture="${TMP}/codexbar-antigravity-late.json"
+jq '. + [{provider:"antigravity",usage:{primary:{usedPercent:10,windowMinutes:300,resetsAt:"2099-01-01T05:40:00Z"}}},
+        {provider:"opencodego",  usage:{primary:{usedPercent:20,windowMinutes:300,resetsAt:"2099-01-01T05:40:00Z"}}}]' \
+    "${FIXTURE_DIR}/codexbar-mixed.json" > "${late_arrival_fixture}"
+
+cache=$(mk_cache)
+# Seed state as if opencodego was already declared (in its existing slot)
+# but antigravity is the new arrival.
+seed_sketchybar_state      "${cache}" codex claude gemini opencodego
+seed_sketchybar_live_items "${cache}" codex claude gemini opencodego
+log="${TMP}/sb-late-arrival.log"
+run_sketchybar_plugin "${late_arrival_fixture}" "${cache}" "${log}"
+plugin_log="$(< "${log}")"
+
+add_antigravity=$(printf '%s' "${plugin_log}" \
+    | grep -n -F -- '--add item showy_bar.antigravity.label left' | head -n1 | cut -d: -f1)
+add_opencodego=$(printf '%s' "${plugin_log}" \
+    | grep -n -F -- '--add item showy_bar.opencodego.label left' | head -n1 | cut -d: -f1)
+if [[ -n "${add_antigravity}" && -n "${add_opencodego}" \
+    && "${add_antigravity}" -lt "${add_opencodego}" ]]; then
+    ok "late-arriving provider lands ahead of later-sorting peer"
+else
+    fail "late-arriving provider lands ahead of later-sorting peer" \
+        "antigravity line=${add_antigravity} opencodego line=${add_opencodego}"
+fi
 
 cache=$(mk_cache)
 log="${TMP}/sb-filter.log"

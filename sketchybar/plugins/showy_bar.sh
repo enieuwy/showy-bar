@@ -562,6 +562,14 @@ elif [[ -n "${expected_live_providers}" ]] && ! declared_items_present "${expect
     force_redeclare=1
     declared_item_providers=""
     showy_bar_log "sketchybar items missing; forcing redeclare"
+elif [[ "${desired_providers}" != "${declared_providers}" ]]; then
+    # Set or order changed. SketchyBar lays items out by `--add` order
+    # within a position group, so an incremental add appends a new
+    # provider to the end regardless of where it sorts in
+    # desired_providers. Force a full teardown so positions match the
+    # desired sort.
+    force_redeclare=1
+    declared_item_providers=""
 fi
 
 
