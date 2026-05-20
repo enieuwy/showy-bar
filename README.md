@@ -243,12 +243,6 @@ Cache lives at `${XDG_CACHE_HOME:-~/.cache}/showy-bar/usage.json`.
 
 ## Theme gallery
 
-Each preview uses the same two-provider fixture with `3:29` and `23m`
-countdowns, good/warn/bad remaining-usage colors, and different pacing-marker
-positions visible. SketchyBar previews are static renderings of the same
-icon/row layout. Terminal previews show the deterministic
-`showy-bar --preview` output.
-
 | theme name | SketchyBar image | terminal / Zellij image |
 |---|---|---|
 | `carbonfox` | <img src="docs/images/themes/carbonfox-sketchybar.svg" alt="carbonfox SketchyBar preview" width="420"> | <img src="docs/images/themes/carbonfox-terminal.png" alt="carbonfox terminal preview" width="420"> |
@@ -282,12 +276,6 @@ icon/row layout. Terminal previews show the deterministic
 - Terminal strips omit CodexBar's `tertiary` window. Zellij and tmux show
   primary over secondary in a single half-block strip. SketchyBar shows up to
   three stacked bars when the provider exposes a tertiary window.
-- **Stale cache is rendered as a frozen snapshot.** When the cache is older than
-  `2 × SHOWY_BAR_REFRESH_SECONDS`, every visual surface shows one trailing `⚠`,
-  greys caps/bars/sigil backgrounds/separators/countdowns with
-  `SHOWY_BAR_PALETTE_STALE`, keeps provider icons and sigil letters unchanged,
-  and hides elapsed markers. `showy-bar-state` exposes the same stale decision,
-  cache age, and threshold in JSON.
 - No Linux-side provider for browser-cookie providers — same constraint
   as CodexBar itself.
 
