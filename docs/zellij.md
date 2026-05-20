@@ -6,22 +6,27 @@
 `pipe` widget. Format per provider:
 
 ```
-<SIGIL>▕<12-cell 5h/7d bar>▏<countdown>
+<SIGIL>▕<12-cell bar body>▏<countdown>
 ```
 
 | Segment | Meaning |
 |---|---|
-| **SIGIL** | 2-letter provider abbreviation (`CL`, `CX`, `GE`, …), rendered in the primary-window color pill. |
-| **bar** | 12 cells of upper-half blocks (`▀`). Foreground is the primary/5h window; background is the secondary/7d window. The secondary elapsed marker is drawn with `SHOWY_BAR_PALETTE_ELAPSED` in the lower half. |
+| **SIGIL** | 2-letter provider abbreviation (`CL`, `CX`, `GE`, …), rendered in the provider severity color pill. |
+| **bar** | In default `auto` mode, time-tier providers render as `dual`: 12 upper-half blocks (`▀`) where foreground is primary/5h and background is secondary/7d, with the secondary elapsed marker in `SHOWY_BAR_PALETTE_ELAPSED`. Providers listed in `SHOWY_BAR_MONO3_PROVIDERS` (`gemini,antigravity` by default) render as `mono3`: primary, secondary, and tertiary are top/middle/bottom sextant rows with one foreground color, plus one provider-level light `│` pacing separator. The separator is based on the primary row by default. |
 | **countdown** | Compact like `12m`, `4h`, `4:31`, `2d`, `5w`, or `?` if the provider does not expose a primary reset time. Normal labels use `SHOWY_BAR_PALETTE_COUNTDOWN`; urgent labels use `SHOWY_BAR_PALETTE_COUNTDOWN_WARN`. |
 
-Set `SHOWY_BAR_TERMINAL_BAR_MODE=sextant3` to replace the half-block bar body
-with Unicode sextant/block mosaic glyphs (`🬂`, `🬋`, `🬭`, `🬎`, `🬰`, `🬹`,
-`█`). That mode encodes primary, secondary, and tertiary as top/middle/bottom
-thirds inside the same terminal row. A terminal cell still has only one
-foreground/background pair, so `sextant3` colors a filled cell by the
-bottom-most filled row (tertiary over secondary over primary) and omits elapsed
-markers.
+`SHOWY_BAR_MONO3_PROVIDERS` opts providers into `mono3` in `auto` mode;
+`SHOWY_BAR_MONO3_PROVIDERS_EXCLUDE` wins and forces listed providers back to
+`dual`. `SHOWY_BAR_MONO3_COLOR_MODE=lowest` colors `mono3` by the lowest
+remaining visible row using the primary palette; set it to `primary` to key off
+primary only. `SHOWY_BAR_MONO3_MARKER_SOURCE` selects the one mono3 pacing
+separator: `primary` (default), `secondary`, `tertiary`, `shared` (only when at
+least two rows share one parseable reset/window), or `none`. Stale snapshots
+hide mono3 pacing separators. Set
+`SHOWY_BAR_TERMINAL_BAR_MODE=dual`, `sextant3`, or `mono3` to force one body
+mode for every provider. Forced `sextant3` uses the same top/middle/bottom
+geometry as `mono3`, but keeps the bottom-most filled row as the cell color and
+omits elapsed markers.
 
 When the cache is older than `2 × SHOWY_BAR_REFRESH_SECONDS`, the strip gets
 one trailing `SHOWY_BAR_STALE_GLYPH` (default `⚠`) after the last provider.
@@ -46,10 +51,10 @@ Powerline-Extra font for the U+E0A0–U+E0D4 range, or set either
 alternatives are `` / `` (slant) and `` / ``
 (flame).
 
-The default bar body itself uses only Unicode Block Elements (`▀`,
-`▕`, `▏`), which every monospace font carries. The opt-in `sextant3`
-mode also requires a font with Unicode Symbols for Legacy Computing
-U+1FB00–U+1FB3B.
+The `dual` body uses only Unicode Block Elements (`▀`, `▕`, `▏`), which every
+monospace font carries. `auto` may use `mono3` for model-class providers, and
+the forced `sextant3`/`mono3` bodies require a font with Unicode Symbols for
+Legacy Computing U+1FB00–U+1FB3B.
 
 ## Pipe vs command widget
 

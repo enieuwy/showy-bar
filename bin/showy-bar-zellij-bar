@@ -166,6 +166,54 @@ tri_metric_bar() {
     style_text '▏' "${bg_color}" "${surface_color}"
 }
 
+tri_metric_bar_mono() {
+    local p_remaining="$1" s_remaining="$2" t_remaining="$3"
+    local p_used="$4" p_reset="$5" p_window="$6"
+    local s_used="$7" s_reset="$8" s_window="$9"
+    local t_used="${10}" t_reset="${11}" t_window="${12}"
+    local mono_override="${13:-}"
+    local width="${SHOWY_BAR_ZELLIJ_BAR_WIDTH:-12}"
+    [[ "${width}" =~ ^[0-9]+$ ]] || width=12
+    (( width < 8 )) && width=8
+
+    local mono_color bg_color surface_color elapsed_color
+    mono_color="${mono_override:-$(showy_bar_mono3_color "${p_remaining}" "${s_remaining}" "${t_remaining}" "${p_used}" "${s_used}" "${t_used}")}"
+    bg_color=$(showy_bar_palette bg)
+    surface_color=$(showy_bar_palette surface)
+    elapsed_color=$(showy_bar_palette elapsed)
+
+    local p_fill s_fill t_fill marker i mask char cell_color
+    p_fill=$(showy_bar_filled_cells "${p_remaining}" "${width}")
+    s_fill=$(showy_bar_filled_cells "${s_remaining}" "${width}")
+    t_fill=$(showy_bar_filled_cells "${t_remaining}" "${width}")
+    marker=$(showy_bar_mono3_marker_boundary "${width}" \
+        "${p_used}" "${p_reset}" "${p_window}" \
+        "${s_used}" "${s_reset}" "${s_window}" \
+        "${t_used}" "${t_reset}" "${t_window}" || true)
+
+    for (( i=0; i<width; i++ )); do
+        if [[ "${marker}" =~ ^[0-9]+$ && "${i}" == "${marker}" ]]; then
+            style_text '│' "${elapsed_color}" "${surface_color}"
+        fi
+
+        mask=0
+        (( i < p_fill )) && mask=$((mask | 1))
+        (( i < s_fill )) && mask=$((mask | 2))
+        (( i < t_fill )) && mask=$((mask | 4))
+        char=$(showy_bar_sextant_mask_char "${mask}")
+
+        if (( mask == 0 )); then cell_color="${surface_color}"
+        else cell_color="${mono_color}"; fi
+
+        style_text "${char}" "${cell_color}" "${surface_color}"
+    done
+    if [[ "${marker}" =~ ^[0-9]+$ && "${marker}" == "${width}" ]]; then
+        style_text '│' "${elapsed_color}" "${surface_color}"
+    fi
+    style_text '▏' "${bg_color}" "${surface_color}"
+}
+
+
 # ── data load ────────────────────────────────────────────────────────
 
 if [[ -n "${json_input}" ]]; then
@@ -227,7 +275,7 @@ first_chunk=1
 chunk_bg=$(showy_bar_palette bg)
 stale_color=$(showy_bar_palette stale)
 countdown_warn=$(showy_bar_palette countdown_warn)
-while IFS=$'\x1f' read -r provider p_used p_reset _p_window s_used s_reset s_window t_used _t_reset _t_window; do
+while IFS=$'\x1f' read -r provider p_used p_reset p_window s_used s_reset s_window t_used t_reset t_window; do
     [[ -n "${provider}" ]] || continue
 
     p_remaining=$((100 - p_used))
@@ -265,31 +313,59 @@ while IFS=$'\x1f' read -r provider p_used p_reset _p_window s_used s_reset s_win
     if (( first_chunk )); then first_chunk=0
     else printf ' '; fi
 
-    marker_reset="${s_reset}"
-    marker_window="${s_window}"
+    marker_p_reset="${p_reset}"
+    marker_p_window="${p_window}"
+    marker_s_reset="${s_reset}"
+    marker_s_window="${s_window}"
+    marker_t_reset="${t_reset}"
+    marker_t_window="${t_window}"
     if (( stale )); then
-        marker_reset=""
-        marker_window=""
+        marker_p_reset=""
+        marker_p_window=""
+        marker_s_reset=""
+        marker_s_window=""
+        marker_t_reset=""
+        marker_t_window=""
     fi
     surface_color=$(showy_bar_palette surface)
     primary_color=$(showy_bar_role_color primary "${p_remaining}")
     secondary_color=$(showy_bar_role_color secondary "${s_remaining}")
     tertiary_color=$(showy_bar_role_color tertiary "${t_remaining}")
+    bar_mode=$(showy_bar_terminal_mode_for_provider "${provider}" \
+        "${p_used}" "${p_reset}" "${p_window}" \
+        "${s_used}" "${s_reset}" "${s_window}" \
+        "${t_used}" "${t_reset}" "${t_window}")
+    mono_color=""
+    if [[ "${bar_mode}" == "mono3" ]]; then
+        mono_color=$(showy_bar_mono3_color "${p_remaining}" "${s_remaining}" "${t_remaining}" "${p_used}" "${s_used}" "${t_used}")
+        primary_color="${mono_color}"
+    fi
     if (( stale )); then
         primary_color="${stale_color}"
         secondary_color="${stale_color}"
         tertiary_color="${stale_color}"
+        mono_color="${stale_color}"
     fi
     separator_fg="${chunk_bg}"
     separator_bg="${primary_color}"
     style_text "${CAP_LEFT}" "${primary_color}" "${chunk_bg}"
     style_text "${sigil}" "${chunk_bg}" "${primary_color}" bold
     style_text '▕' "${separator_fg}" "${separator_bg}"
-    if [[ "${SHOWY_BAR_TERMINAL_BAR_MODE}" == "sextant3" ]]; then
-        tri_metric_bar "${p_remaining}" "${s_remaining}" "${t_remaining}" "${primary_color}" "${secondary_color}" "${tertiary_color}"
-    else
-        dual_metric_bar "${p_remaining}" "${s_remaining}" "${marker_reset}" "${marker_window}" "${primary_color}" "${secondary_color}"
-    fi
+    case "${bar_mode}" in
+        sextant3)
+            tri_metric_bar "${p_remaining}" "${s_remaining}" "${t_remaining}" "${primary_color}" "${secondary_color}" "${tertiary_color}"
+            ;;
+        mono3)
+            tri_metric_bar_mono "${p_remaining}" "${s_remaining}" "${t_remaining}" \
+                "${p_used}" "${marker_p_reset}" "${marker_p_window}" \
+                "${s_used}" "${marker_s_reset}" "${marker_s_window}" \
+                "${t_used}" "${marker_t_reset}" "${marker_t_window}" \
+                "${mono_color}"
+            ;;
+        *)
+            dual_metric_bar "${p_remaining}" "${s_remaining}" "${marker_s_reset}" "${marker_s_window}" "${primary_color}" "${secondary_color}"
+            ;;
+    esac
     style_text "${countdown}" "${time_color}" "${surface_color}" bold
     style_text "${CAP_RIGHT}" "${surface_color}" "${chunk_bg}"
 done <<< "${rows}"

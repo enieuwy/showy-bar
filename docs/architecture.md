@@ -68,11 +68,19 @@ run `${SHOWY_BAR_CODEXBAR_BIN:-codexbar} usage` directly because they display
 CodexBar's text UI, not the compact cache-backed renderer output.
 
 `SHOWY_BAR_TERMINAL_BAR_MODE` only affects the Zellij/tmux bar body. The
-default `dual` renderer keeps the two-row half-block geometry. The opt-in
-`sextant3` renderer reads the tertiary window too and packs primary, secondary,
-and tertiary into one terminal cell row using U+1FBxx sextant glyphs; because
-terminal cells have one foreground/background pair, it selects one cell color
-by bottom-most filled row and does not draw elapsed markers.
+default `auto` renderer selects per provider from configuration: providers in
+`SHOWY_BAR_MONO3_PROVIDERS` (default `gemini,antigravity`) render as `mono3`
+unless excluded by `SHOWY_BAR_MONO3_PROVIDERS_EXCLUDE`; every other provider
+uses `dual` primary/secondary half-block geometry. `mono3` reads the tertiary
+window, packs primary/secondary/tertiary into one U+1FBxx sextant row, and uses
+one provider-level foreground color (`SHOWY_BAR_MONO3_COLOR_MODE=lowest|primary`).
+Because the terminal body can draw only one pacing separator, mono3 bases it on
+`SHOWY_BAR_MONO3_MARKER_SOURCE` (`primary` by default; `secondary`, `tertiary`,
+`shared`, and `none` are supported). The `shared` source only draws when at
+least two rows have the same parseable reset epoch and `windowMinutes`. Forced
+`SHOWY_BAR_TERMINAL_BAR_MODE=sextant3` keeps the older bottom-most-row cell-color
+policy and does not draw elapsed markers; forced `dual` and `mono3` apply those
+bodies to every provider.
 
 ## Failure semantics
 

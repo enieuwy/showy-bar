@@ -6,24 +6,32 @@
 provider chunks as the Zellij strip:
 
 ```text
-<SIGIL>▕<12-cell primary/secondary half-block bar>▏<countdown>
+<SIGIL>▕<12-cell bar body>▏<countdown>
 ```
 
-The bar uses upper-half blocks (`▀`) so each full-height terminal cell carries
-two windows: foreground is the primary window, background is the secondary
-window. The secondary elapsed marker is drawn with `SHOWY_BAR_PALETTE_ELAPSED`
-in the lower half. Colors are emitted as tmux `#[fg=#RRGGBB,bg=#RRGGBB]`
-markup; the markup is longer than the visible strip but does not consume
-status-line columns.
+Default `SHOWY_BAR_TERMINAL_BAR_MODE=auto` renders each provider according to
+its configured terminal body. Time-tier providers use `dual`: upper-half blocks
+(`▀`) where foreground is primary and background is secondary, with the
+secondary elapsed marker in `SHOWY_BAR_PALETTE_ELAPSED`. Providers listed in
+`SHOWY_BAR_MONO3_PROVIDERS` (`gemini,antigravity` by default) use `mono3`:
+primary, secondary, and tertiary are top/middle/bottom sextant rows with one
+provider-level foreground color and one fixed light `│` pacing separator. The
+separator is based on the primary row by default, so the bar body is one
+terminal cell wider only when that selected row has a parseable reset/window.
 
-Set `SHOWY_BAR_TERMINAL_BAR_MODE=sextant3` to replace the half-block body with
-Unicode sextant/block mosaic glyphs (`🬂`, `🬋`, `🬭`, `🬎`, `🬰`, `🬹`, `█`).
-That mode encodes primary, secondary, and tertiary as top/middle/bottom thirds
-inside the same status-line row. tmux still gives each cell only one
-foreground/background pair, so `sextant3` colors a filled cell by the
-bottom-most filled row (tertiary over secondary over primary) and omits elapsed
-markers. It requires a font with Unicode Symbols for Legacy Computing
-U+1FB00–U+1FB3B.
+Colors are emitted as tmux `#[fg=#RRGGBB,bg=#RRGGBB]` markup; the markup is
+longer than the visible strip but does not consume status-line columns.
+`SHOWY_BAR_MONO3_PROVIDERS` opts providers into `mono3` in `auto` mode;
+`SHOWY_BAR_MONO3_PROVIDERS_EXCLUDE` wins and forces listed providers back to
+`dual`. `SHOWY_BAR_MONO3_COLOR_MODE=lowest` colors `mono3` by the lowest
+remaining visible row using the primary palette; set it to `primary` to key off
+primary only. `SHOWY_BAR_MONO3_MARKER_SOURCE` selects the one mono3 pacing
+separator: `primary` (default), `secondary`, `tertiary`, `shared` (only when at
+least two rows share one parseable reset/window), or `none`. Stale snapshots
+hide mono3 pacing separators. Set `SHOWY_BAR_TERMINAL_BAR_MODE=dual`, `sextant3`,
+or `mono3` to force one body mode for every provider. Forced `sextant3` uses
+the same top/middle/bottom geometry as `mono3`, but keeps the bottom-most filled
+row as the cell color and omits elapsed markers.
 
 When the cache is older than `2 × SHOWY_BAR_REFRESH_SECONDS`, tmux gets one
 trailing `SHOWY_BAR_STALE_GLYPH` (default `⚠`) after the last provider. The
@@ -35,6 +43,22 @@ background stay unchanged, and elapsed markers are hidden.
 fresh: #[…]CL▕▀▀▀▀▀▀▀▀▀▀▀▀▏12m
 stale: #[…]CL▕▀▀▀▀▀▀▀▀▀▀▀▀▏12m #[…]⚠   # data-bearing colors greyed
 ```
+
+## Font requirements
+
+Each provider chunk is wrapped in Powerline-Extra end caps: U+E0B6
+(`SHOWY_BAR_CAP_LEFT`, default ``) and U+E0B4 (`SHOWY_BAR_CAP_RIGHT`, default
+``). Any Nerd Font ships these; with a non-Nerd font configure a fallback for
+the U+E0A0–U+E0D4 range, or set either `SHOWY_BAR_CAP_*` env var to an empty
+string for a flat edge.
+
+The `dual` body uses common Unicode Block Elements (`▀`, `▕`, `▏`). `auto`
+renders providers in `SHOWY_BAR_MONO3_PROVIDERS` as `mono3`, and forced
+`sextant3`/`mono3` bodies require Unicode Symbols for Legacy Computing
+U+1FB00–U+1FB3B. If your tmux font cannot render those sextants, use a font with
+that range, remove the provider from `SHOWY_BAR_MONO3_PROVIDERS`, or force
+`SHOWY_BAR_TERMINAL_BAR_MODE=dual`.
+
 
 ## status-right
 

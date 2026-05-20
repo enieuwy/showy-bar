@@ -101,7 +101,8 @@ state a bug report needs.
 - The Zellij renderer wraps each provider chunk in Powerline-Extra end
   caps (U+E0B6 / U+E0B4). Any Nerd Font ships these; with a non-Nerd
   font, set `SHOWY_BAR_CAP_LEFT=` / `SHOWY_BAR_CAP_RIGHT=` to blank
-  them. tmux uses only Unicode Block Elements and needs no special font.
+  them. Terminal sextant modes have additional font notes in `docs/zellij.md`
+  and `docs/tmux.md`.
 - Optional: `flock` for inter-process locking; falls back to an owner-scoped
   `mkdir` lock when missing.
 - Optional: `curl` for the default `codexbar serve` probe; without it,
@@ -218,7 +219,11 @@ Useful knobs:
 | `SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE` | `svg`                            | `svg` for CodexBar SVG icons, `font` for mapped app-font glyphs with SVG fallback |
 | `SHOWY_BAR_CODEXBAR_RESOURCES`      | `/Applications/CodexBar.app/...`       | Where to find provider SVGs                           |
 | `SHOWY_BAR_SKETCHYBAR_COMPACT_PROVIDER_COUNT` | `5` | Provider-count breakpoint exposed by `showy-bar-state` for external layout managers |
-| `SHOWY_BAR_TERMINAL_BAR_MODE`     | `dual`                                 | Terminal renderer mode: `dual` keeps primary/secondary half-blocks; `sextant3` opt-in packs primary/secondary/tertiary into one row |
+| `SHOWY_BAR_TERMINAL_BAR_MODE`     | `auto`                                 | Terminal renderer mode: `auto` keeps time-tier providers in `dual` and renders configured model-class providers as `mono3`; set `dual`, `sextant3`, or `mono3` to force one body mode for every provider |
+| `SHOWY_BAR_MONO3_PROVIDERS`       | `gemini,antigravity`                  | Comma-list of providers that use `mono3` in `auto` mode |
+| `SHOWY_BAR_MONO3_PROVIDERS_EXCLUDE` | empty                                | Comma-list of providers forced back to `dual` in `auto` mode |
+| `SHOWY_BAR_MONO3_COLOR_MODE`      | `lowest`                              | `mono3` foreground policy: `lowest` uses the lowest remaining visible row; `primary` uses primary severity |
+| `SHOWY_BAR_MONO3_MARKER_SOURCE`   | `primary`                             | Single `mono3` pacing separator source: `primary`, `secondary`, `tertiary`, `shared`, or `none` |
 
 Secondary and tertiary row colors auto-derive from the primary palette at
 `0.55` by default. Override `SHOWY_BAR_PALETTE_SECONDARY_*`,
@@ -274,12 +279,18 @@ Cache lives at `${XDG_CACHE_HOME:-~/.cache}/showy-bar/usage.json`.
 - `codexbar` runs from a GUI macOS app bundle; cookie-based providers
   need Full Disk Access in System Settings → Privacy & Security to
   decrypt browser cookies.
-- Terminal strips default to primary over secondary in a single half-block
-  strip. Set `SHOWY_BAR_TERMINAL_BAR_MODE=sextant3` to encode primary,
-  secondary, and tertiary as top/middle/bottom sextant rows in one terminal
-  row. `sextant3` requires font support for Unicode U+1FBxx and uses one
-  foreground color per cell, so rows are not independently colored; the
-  bottom-most filled row chooses the cell color, and elapsed markers are omitted.
+- Terminal strips default to `auto`: time-tier providers such as 5h/7d stay in
+  the primary-over-secondary half-block `dual` body, while providers listed in
+  `SHOWY_BAR_MONO3_PROVIDERS` (Gemini/Antigravity by default) use `mono3`.
+  `mono3` encodes primary, secondary, and tertiary as top/middle/bottom sextant
+  rows with one provider-level foreground color and one light `│` pacing
+  separator. The separator is based on the primary row by default; set
+  `SHOWY_BAR_MONO3_MARKER_SOURCE=secondary`, `tertiary`, `shared`, or `none` to
+  change or suppress it. Use `SHOWY_BAR_MONO3_PROVIDERS` /
+  `SHOWY_BAR_MONO3_PROVIDERS_EXCLUDE` for per-provider auto-mode overrides. Set
+  `SHOWY_BAR_TERMINAL_BAR_MODE=dual`, `sextant3`, or `mono3` only when you want
+  to force one body mode for every provider; `sextant3` keeps the bottom-most-row
+  color policy and has no elapsed marker.
 - No Linux-side provider for browser-cookie providers — same constraint
   as CodexBar itself.
 

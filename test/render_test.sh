@@ -398,6 +398,23 @@ run_common_eval() {
         '
 }
 
+run_strip_eval() {
+    local code="$1"
+    shift
+    # shellcheck disable=SC2016
+    env \
+        SHOWY_BAR_TEST_CODE="${code}" \
+        SHOWY_BAR_TEST_REPO_ROOT="${REPO_ROOT}" \
+        "$@" \
+        bash -lc '
+            set -euo pipefail
+            . "${SHOWY_BAR_TEST_REPO_ROOT}/lib/common.sh"
+            . "${SHOWY_BAR_TEST_REPO_ROOT}/lib/strip.sh"
+            eval "${SHOWY_BAR_TEST_CODE}"
+        '
+}
+
+
 hex_to_rgb_csv() {
     local hex="$1"
     printf '%d,%d,%d' $((16#${hex:0:2})) $((16#${hex:2:2})) $((16#${hex:4:2}))
@@ -438,6 +455,23 @@ assert_equals "built-in Catppuccin Mocha Blue theme overrides the primary palett
 # shellcheck disable=SC2016
 out=$(run_common_eval 'printf "%s|%s|%s|%s|%s|%s|%s" "$(showy_bar_role_palette primary good)" "$(showy_bar_role_palette primary warn)" "$(showy_bar_palette bg)" "$(showy_bar_palette icon_text)" "$(showy_bar_palette countdown)" "$(showy_bar_palette countdown_warn)" "$(showy_bar_palette elapsed)"' SHOWY_BAR_NO_CONFIG=1 SHOWY_BAR_THEME=default)
 assert_equals "built-in default theme exposes original palette" "25be6a|f0af00|161616|f2f4f8|7b8496|ee5396|be95ff" "${out}"
+
+out=$(run_strip_eval 'showy_bar_elapsed_marker_boundary "2099-01-01T01:40:00Z" 100 8' SHOWY_BAR_NO_CONFIG=1 SHOWY_BAR_NOW_EPOCH=4070914800)
+assert_equals "elapsed boundary clamps reset-now to left edge" "0" "${out}"
+
+out=$(run_strip_eval 'showy_bar_elapsed_marker_boundary "2099-01-01T01:40:00Z" 100 8' SHOWY_BAR_NO_CONFIG=1 SHOWY_BAR_NOW_EPOCH=4070908800)
+assert_equals "elapsed boundary keeps just-started window at right edge" "8" "${out}"
+
+out=$(run_strip_eval 'showy_bar_shared_window_marker_boundary 8 25 "2099-01-01T01:40:00Z" 100 50 "2099-01-01T01:40:00Z" 100 75 "2099-01-01T01:40:00Z" 100' SHOWY_BAR_NO_CONFIG=1 SHOWY_BAR_NOW_EPOCH=4070912400)
+assert_equals "shared-window marker returns between-cell boundary" "3" "${out}"
+
+out=$(run_strip_eval 'if showy_bar_shared_window_marker_boundary 8 25 "2099-01-01T01:40:00Z" 100 50 "2099-01-01T01:40:00Z" 300 75 "2099-01-01T01:40:00Z" 100; then printf marker; else printf none; fi' SHOWY_BAR_NO_CONFIG=1 SHOWY_BAR_NOW_EPOCH=4070912400)
+assert_equals "shared-window marker rejects disagreeing windows" "none" "${out}"
+
+out=$(run_strip_eval 'if showy_bar_shared_window_marker_boundary 8 25 "2099-01-01T01:40:00Z" 100 50 "2099-01-01T02:00:00Z" 100 75 "2099-01-01T01:40:00Z" 100; then printf marker; else printf none; fi' SHOWY_BAR_NO_CONFIG=1 SHOWY_BAR_NOW_EPOCH=4070912400)
+assert_equals "shared-window marker rejects disagreeing reset epochs" "none" "${out}"
+
+
 
 theme_xdg="${TMP}/xdg-theme"
 mkdir -p "${theme_xdg}/showy-bar"
@@ -607,6 +641,26 @@ printf '%s\n' \
     '{"provider":"claude","usage":{"primary":{"usedPercent":25},"secondary":{"usedPercent":50,"windowMinutes":100,"resetsAt":"2099-01-01T01:40:00Z"},"tertiary":{"usedPercent":75}}}' \
     ']' > "${sextant_fixture}"
 
+mono_fixture="${TMP}/codexbar-mono.json"
+printf '%s\n' \
+    '[' \
+    '{"provider":"gemini","usage":{"primary":{"usedPercent":25,"windowMinutes":100,"resetsAt":"2099-01-01T01:40:00Z"},"secondary":{"usedPercent":50,"windowMinutes":200,"resetsAt":"2099-01-01T03:20:00Z"},"tertiary":{"usedPercent":75,"windowMinutes":300,"resetsAt":"2099-01-01T05:00:00Z"}}}' \
+    ']' > "${mono_fixture}"
+
+mono_antigravity_fixture="${TMP}/codexbar-mono-antigravity.json"
+printf '%s\n' \
+    '[' \
+    '{"provider":"antigravity","usage":{"primary":{"usedPercent":25,"windowMinutes":100,"resetsAt":"2099-01-01T01:40:00Z"},"secondary":{"usedPercent":50,"windowMinutes":200,"resetsAt":"2099-01-01T03:20:00Z"},"tertiary":{"usedPercent":75,"windowMinutes":300,"resetsAt":"2099-01-01T05:00:00Z"}}}' \
+    ']' > "${mono_antigravity_fixture}"
+
+mono_claude_fixture="${TMP}/codexbar-mono-claude.json"
+printf '%s\n' \
+    '[' \
+    '{"provider":"claude","usage":{"primary":{"usedPercent":25,"windowMinutes":100,"resetsAt":"2099-01-01T01:40:00Z"},"secondary":{"usedPercent":50,"windowMinutes":200,"resetsAt":"2099-01-01T03:20:00Z"},"tertiary":{"usedPercent":75,"windowMinutes":300,"resetsAt":"2099-01-01T05:00:00Z"}}}' \
+    ']' > "${mono_claude_fixture}"
+
+
+
 
 out=$(run_renderer showy-bar-zellij-bar codexbar-mixed.json)
 assert_contains "renders CL sigil for claude"          "CL"  "${out}"
@@ -625,6 +679,37 @@ assert_not_contains "zellij default terminal mode is not sextant3" "🬎" "${out
 out=$(run_renderer showy-bar-zellij-bar "${sextant_fixture}" SHOWY_BAR_TERMINAL_BAR_MODE=sextant3 SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
 assert_contains "zellij sextant3 renders three stacked row geometry" "CL▕██🬎🬎🬂🬂  ▏" "${out}"
 assert_not_contains "zellij sextant3 omits half-block cells" "▀" "${out}"
+
+out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
+assert_contains "zellij auto mono3 uses primary marker by default" "GE▕██🬎│🬎🬂🬂  ▏" "${out}"
+assert_not_contains "zellij auto mono3 omits half-block cells" "▀" "${out}"
+
+out=$(run_renderer showy-bar-zellij-bar "${mono_antigravity_fixture}" SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
+assert_contains "zellij auto mono3 includes antigravity by default" "AG▕██🬎│🬎🬂🬂  ▏" "${out}"
+
+
+out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070914800 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
+assert_contains "zellij auto mono3 primary boundary zero starts after left separator" "GE▕│██🬎🬎🬂🬂  ▏" "${out}"
+
+out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070908800 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
+assert_contains "zellij auto mono3 primary boundary width ends before right cap" "GE▕██🬎🬎🬂🬂  │▏" "${out}"
+
+out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_MONO3_MARKER_SOURCE=secondary SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
+assert_contains "zellij auto mono3 marker source can use secondary" "GE▕██🬎🬎🬂│🬂  ▏" "${out}"
+
+out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_MONO3_MARKER_SOURCE=none SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
+assert_contains "zellij auto mono3 marker source can be disabled" "GE▕██🬎🬎🬂🬂  ▏" "${out}"
+assert_not_contains "zellij auto mono3 disabled marker omits separator" "│" "${out}"
+
+
+out=$(run_renderer showy-bar-zellij-bar "${mono_claude_fixture}" SHOWY_BAR_MONO3_PROVIDERS=claude SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
+assert_contains "zellij provider mono3 override uses mono marker path" "CL▕██🬎│🬎🬂🬂  ▏" "${out}"
+assert_not_contains "zellij provider mono3 override omits half-block cells" "▀" "${out}"
+
+out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_MONO3_PROVIDERS_EXCLUDE=gemini SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
+assert_contains "zellij mono3 provider exclude forces dual" "▀" "${out}"
+assert_not_contains "zellij mono3 provider exclude suppresses separator" "│" "${out}"
+
 
 out=$(run_renderer showy-bar-zellij-bar codexbar-empty.json)
 assert_contains "empty fixture renders 'AI idle'"      "AI idle" "${out}"
@@ -668,6 +753,22 @@ assert_contains "tmux sextant3 renders three stacked row geometry" "CL▕██�
 assert_not_contains "tmux sextant3 omits half-block cells" "▀" "${visible}"
 assert_contains "tmux sextant3 colors all-row cells by bottom role" "fg=#846000,bg=#2a2a2a]█" "${out}"
 assert_not_contains "tmux sextant3 omits elapsed markers" "be95ff" "${out}"
+
+out=$(run_renderer showy-bar-tmux-bar "${mono_fixture}" SHOWY_BAR_TMUX_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400)
+visible=$(strip_tmux_markup "${out}")
+assert_contains "tmux auto mono3 visible output preserves separator geometry" "GE▕██🬎│🬎🬂🬂  ▏" "${visible}"
+assert_not_contains "tmux auto mono3 omits half-block cells" "▀" "${visible}"
+assert_contains "tmux auto mono3 colors separator with elapsed palette" "fg=#be95ff,bg=#2a2a2a]│" "${out}"
+assert_contains "tmux auto mono3 uses one primary-palette foreground" "fg=#f0af00,bg=#2a2a2a]█" "${out}"
+assert_contains "tmux auto mono3 colors combined sextants with primary foreground" "fg=#f0af00,bg=#2a2a2a]🬎" "${out}"
+assert_not_contains "tmux auto mono3 does not use bottom-role all-row color" "fg=#846000,bg=#2a2a2a]█" "${out}"
+assert_not_contains "tmux auto mono3 does not use role color for combined sextants" "fg=#846000,bg=#2a2a2a]🬎" "${out}"
+
+out=$(run_renderer showy-bar-tmux-bar "${mono_claude_fixture}" SHOWY_BAR_MONO3_PROVIDERS=claude SHOWY_BAR_TMUX_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400)
+visible=$(strip_tmux_markup "${out}")
+assert_contains "tmux provider mono3 override uses mono marker path" "CL▕██🬎│🬎🬂🬂  ▏" "${visible}"
+assert_contains "tmux provider mono3 override colors separator with elapsed palette" "fg=#be95ff,bg=#2a2a2a]│" "${out}"
+
 
 out=$(run_renderer showy-bar-tmux-bar codexbar-empty.json)
 assert_contains "tmux empty fixture renders 'AI idle'" "AI idle" "${out}"
@@ -1380,6 +1481,41 @@ assert_contains "tmux sextant3 greys stale sextant cells" "#[fg=#6c7086,bg=#2a2a
 assert_contains "tmux sextant3 keeps separator on stale background" "#[fg=#161616,bg=#6c7086]▕" "${out}"
 assert_not_contains "tmux sextant3 stale omits half-block cells" "▀" "${out}"
 assert_not_contains "tmux sextant3 stale has no elapsed marker" "be95ff" "${out}"
+
+mono_stale_cache=$(mk_cache)
+cp "${mono_fixture}" "${mono_stale_cache}/usage.json"
+touch -t 198801010000 "${mono_stale_cache}/usage.json"
+out=$(
+    SHOWY_BAR_NO_CONFIG=1 \
+    SHOWY_BAR_CACHE_DIR="${mono_stale_cache}" \
+    SHOWY_BAR_CODEXBAR_BIN="${TMP}/no-such-codexbar" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
+    SHOWY_BAR_FORCE_COLOR=1 \
+    SHOWY_BAR_NOW_EPOCH=4070912400 \
+    SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 \
+    "${REPO_ROOT}/bin/showy-bar-zellij-bar"
+)
+assert_contains "zellij mono3 stale shows trailing stale indicator" "${trailing_stale_escape}" "${out}"
+assert_contains "zellij mono3 stale greys sextant cells" "${stale_sextant_escape}" "${out}"
+assert_not_contains "zellij mono3 stale omits half-block cells" "▀" "${out}"
+assert_not_contains "zellij mono3 stale omits shared separator" "│" "${out}"
+assert_not_contains "zellij mono3 stale has no elapsed color" "190;149;255" "${out}"
+
+out=$(
+    SHOWY_BAR_NO_CONFIG=1 \
+    SHOWY_BAR_CACHE_DIR="${mono_stale_cache}" \
+    SHOWY_BAR_CODEXBAR_BIN="${TMP}/no-such-codexbar" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
+    SHOWY_BAR_NOW_EPOCH=4070912400 \
+    SHOWY_BAR_TMUX_BAR_WIDTH=8 \
+    "${REPO_ROOT}/bin/showy-bar-tmux-bar"
+)
+assert_contains "tmux mono3 stale shows trailing stale indicator" "#[fg=#161616,bg=#161616] #[default]#[fg=#ee5396,bg=#161616,bold]⚠" "${out}"
+assert_contains "tmux mono3 stale greys sextant cells" "#[fg=#6c7086,bg=#2a2a2a]🬎" "${out}"
+assert_not_contains "tmux mono3 stale omits half-block cells" "▀" "${out}"
+assert_not_contains "tmux mono3 stale omits shared separator" "│" "${out}"
+assert_not_contains "tmux mono3 stale has no elapsed color" "be95ff" "${out}"
+
 
 stale_past_fixture="${TMP}/codexbar-stale-past.json"
 printf '%s\n' '[{"provider":"claude","usage":{"primary":{"usedPercent":17,"windowMinutes":300,"resetsAt":"1988-01-01T00:00:00Z"}}}]' > "${stale_past_fixture}"
