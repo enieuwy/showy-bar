@@ -128,6 +128,22 @@ showy_bar_filled_cells() {
     printf '%s\n' "${filled}"
 }
 
+# Unicode sextant/block mosaic glyphs for one terminal cell split into three
+# stacked rows: primary(top)=1, secondary(middle)=2, tertiary(bottom)=4.
+showy_bar_sextant_mask_char() {
+    case "$1" in
+        0) printf ' ' ;;
+        1) printf '🬂' ;; # BLOCK SEXTANT-12
+        2) printf '🬋' ;; # BLOCK SEXTANT-34
+        3) printf '🬎' ;; # BLOCK SEXTANT-1234
+        4) printf '🬭' ;; # BLOCK SEXTANT-56
+        5) printf '🬰' ;; # BLOCK SEXTANT-1256
+        6) printf '🬹' ;; # BLOCK SEXTANT-3456
+        7) printf '█' ;;
+        *) printf ' ' ;;
+    esac
+}
+
 # Pacing marker cell for a reset window. Returns non-zero when no marker
 # can be computed.
 # Args: $1 = reset timestamp/description, $2 = window minutes, $3 = width.

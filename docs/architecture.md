@@ -67,6 +67,13 @@ The tmux and Zellij detail panes source showy-bar config when present, then
 run `${SHOWY_BAR_CODEXBAR_BIN:-codexbar} usage` directly because they display
 CodexBar's text UI, not the compact cache-backed renderer output.
 
+`SHOWY_BAR_TERMINAL_BAR_MODE` only affects the Zellij/tmux bar body. The
+default `dual` renderer keeps the two-row half-block geometry. The opt-in
+`sextant3` renderer reads the tertiary window too and packs primary, secondary,
+and tertiary into one terminal cell row using U+1FBxx sextant glyphs; because
+terminal cells have one foreground/background pair, it selects one cell color
+by bottom-most filled row and does not draw elapsed markers.
+
 ## Failure semantics
 
 | Condition                                     | Outcome                                              |

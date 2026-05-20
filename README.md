@@ -218,6 +218,7 @@ Useful knobs:
 | `SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE` | `svg`                            | `svg` for CodexBar SVG icons, `font` for mapped app-font glyphs with SVG fallback |
 | `SHOWY_BAR_CODEXBAR_RESOURCES`      | `/Applications/CodexBar.app/...`       | Where to find provider SVGs                           |
 | `SHOWY_BAR_SKETCHYBAR_COMPACT_PROVIDER_COUNT` | `5` | Provider-count breakpoint exposed by `showy-bar-state` for external layout managers |
+| `SHOWY_BAR_TERMINAL_BAR_MODE`     | `dual`                                 | Terminal renderer mode: `dual` keeps primary/secondary half-blocks; `sextant3` opt-in packs primary/secondary/tertiary into one row |
 
 Secondary and tertiary row colors auto-derive from the primary palette at
 `0.55` by default. Override `SHOWY_BAR_PALETTE_SECONDARY_*`,
@@ -273,9 +274,12 @@ Cache lives at `${XDG_CACHE_HOME:-~/.cache}/showy-bar/usage.json`.
 - `codexbar` runs from a GUI macOS app bundle; cookie-based providers
   need Full Disk Access in System Settings → Privacy & Security to
   decrypt browser cookies.
-- Terminal strips omit CodexBar's `tertiary` window. Zellij and tmux show
-  primary over secondary in a single half-block strip. SketchyBar shows up to
-  three stacked bars when the provider exposes a tertiary window.
+- Terminal strips default to primary over secondary in a single half-block
+  strip. Set `SHOWY_BAR_TERMINAL_BAR_MODE=sextant3` to encode primary,
+  secondary, and tertiary as top/middle/bottom sextant rows in one terminal
+  row. `sextant3` requires font support for Unicode U+1FBxx and uses one
+  foreground color per cell, so rows are not independently colored; the
+  bottom-most filled row chooses the cell color, and elapsed markers are omitted.
 - No Linux-side provider for browser-cookie providers — same constraint
   as CodexBar itself.
 

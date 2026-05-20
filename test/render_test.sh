@@ -379,6 +379,10 @@ assert_equals() {
     fi
 }
 
+strip_tmux_markup() {
+    printf '%s' "$1" | sed -E 's/#\[[^]]*\]//g'
+}
+
 run_common_eval() {
     local code="$1"
     shift
@@ -597,6 +601,13 @@ fi
 
 printf 'zellij renderer\n'
 
+sextant_fixture="${TMP}/codexbar-sextant.json"
+printf '%s\n' \
+    '[' \
+    '{"provider":"claude","usage":{"primary":{"usedPercent":25},"secondary":{"usedPercent":50,"windowMinutes":100,"resetsAt":"2099-01-01T01:40:00Z"},"tertiary":{"usedPercent":75}}}' \
+    ']' > "${sextant_fixture}"
+
+
 out=$(run_renderer showy-bar-zellij-bar codexbar-mixed.json)
 assert_contains "renders CL sigil for claude"          "CL"  "${out}"
 assert_contains "renders CX sigil for codex"           "CX"  "${out}"
@@ -606,6 +617,14 @@ assert_contains "zellij weekly hint uses derived secondary color" "20;104;58m" "
 assert_contains "zellij uses ai-quota powerline left cap" "" "${out}"
 assert_contains "zellij uses ai-quota half-block cells" "▀" "${out}"
 assert_not_contains "zellij no longer emits old block bar" "████" "${out}"
+
+out=$(run_renderer showy-bar-zellij-bar "${sextant_fixture}" SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
+assert_contains "zellij default terminal mode keeps half-block cells" "▀" "${out}"
+assert_not_contains "zellij default terminal mode is not sextant3" "🬎" "${out}"
+
+out=$(run_renderer showy-bar-zellij-bar "${sextant_fixture}" SHOWY_BAR_TERMINAL_BAR_MODE=sextant3 SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
+assert_contains "zellij sextant3 renders three stacked row geometry" "CL▕██🬎🬎🬂🬂  ▏" "${out}"
+assert_not_contains "zellij sextant3 omits half-block cells" "▀" "${out}"
 
 out=$(run_renderer showy-bar-zellij-bar codexbar-empty.json)
 assert_contains "empty fixture renders 'AI idle'"      "AI idle" "${out}"
@@ -642,6 +661,13 @@ assert_contains "tmux uses zellij powerline left cap"  "" "${out}"
 assert_contains "tmux uses half-block primary/secondary cells" "▀" "${out}"
 assert_contains "tmux uses derived secondary background color" "bg=#14683a" "${out}"
 assert_not_contains "tmux no longer emits weekly hint glyph" "]w" "${out}"
+
+out=$(run_renderer showy-bar-tmux-bar "${sextant_fixture}" SHOWY_BAR_TERMINAL_BAR_MODE=sextant3 SHOWY_BAR_TMUX_BAR_WIDTH=8)
+visible=$(strip_tmux_markup "${out}")
+assert_contains "tmux sextant3 renders three stacked row geometry" "CL▕██🬎🬎🬂🬂  ▏" "${visible}"
+assert_not_contains "tmux sextant3 omits half-block cells" "▀" "${visible}"
+assert_contains "tmux sextant3 colors all-row cells by bottom role" "fg=#846000,bg=#2a2a2a]█" "${out}"
+assert_not_contains "tmux sextant3 omits elapsed markers" "be95ff" "${out}"
 
 out=$(run_renderer showy-bar-tmux-bar codexbar-empty.json)
 assert_contains "tmux empty fixture renders 'AI idle'" "AI idle" "${out}"
@@ -1288,6 +1314,7 @@ bg_sgr="${bg_rgb//,/;}"
 countdown_warn_rgb=$(hex_to_rgb_csv "$(run_common_eval 'showy_bar_palette countdown_warn' SHOWY_BAR_NO_CONFIG=1)")
 countdown_warn_sgr="${countdown_warn_rgb//,/;}"
 printf -v stale_half_escape '\033[38;2;%sm\033[48;2;%sm▀' "${stale_sgr}" "${stale_sgr}"
+printf -v stale_sextant_escape '\033[38;2;%sm\033[48;2;%sm🬎' "${stale_sgr}" "${surface_sgr}"
 printf -v stale_sigil_bg_escape '\033[48;2;%smCL' "${stale_sgr}"
 printf -v stale_countdown_escape '\033[38;2;%sm\033[48;2;%sm12m' "${stale_sgr}" "${surface_sgr}"
 printf -v stale_separator_escape '\033[38;2;%sm\033[48;2;%sm▕' "${bg_sgr}" "${stale_sgr}"
@@ -1314,6 +1341,22 @@ out=$(
     SHOWY_BAR_CACHE_DIR="${cache}" \
     SHOWY_BAR_CODEXBAR_BIN="${TMP}/no-such-codexbar" \
     SHOWY_BAR_CODEXBAR_SERVE_URL='' \
+    SHOWY_BAR_FORCE_COLOR=1 \
+    SHOWY_BAR_NOW_EPOCH=4070928480 \
+    SHOWY_BAR_TERMINAL_BAR_MODE=sextant3 \
+    "${REPO_ROOT}/bin/showy-bar-zellij-bar"
+)
+assert_contains "zellij sextant3 stale shows trailing stale indicator" "${trailing_stale_escape}" "${out}"
+assert_contains "zellij sextant3 greys stale sextant cells" "${stale_sextant_escape}" "${out}"
+assert_contains "zellij sextant3 keeps separator on stale background" "${stale_separator_escape}" "${out}"
+assert_not_contains "zellij sextant3 stale omits half-block cells" "▀" "${out}"
+assert_not_contains "zellij sextant3 stale has no elapsed marker" "190;149;255" "${out}"
+
+out=$(
+    SHOWY_BAR_NO_CONFIG=1 \
+    SHOWY_BAR_CACHE_DIR="${cache}" \
+    SHOWY_BAR_CODEXBAR_BIN="${TMP}/no-such-codexbar" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
     SHOWY_BAR_NOW_EPOCH=4070928480 \
     "${REPO_ROOT}/bin/showy-bar-tmux-bar"
 )
@@ -1322,6 +1365,21 @@ assert_contains "tmux shows trailing stale indicator" "#[fg=#161616,bg=#161616] 
 assert_contains "tmux keeps separator on stale background" "#[fg=#161616,bg=#6c7086]▕" "${out}"
 assert_contains "tmux greys stale countdown" "#[fg=#6c7086,bg=#2a2a2a,bold]12m" "${out}"
 assert_not_contains "tmux stale cache has no weekly hint" "]w" "${out}"
+
+out=$(
+    SHOWY_BAR_NO_CONFIG=1 \
+    SHOWY_BAR_CACHE_DIR="${cache}" \
+    SHOWY_BAR_CODEXBAR_BIN="${TMP}/no-such-codexbar" \
+    SHOWY_BAR_CODEXBAR_SERVE_URL='' \
+    SHOWY_BAR_NOW_EPOCH=4070928480 \
+    SHOWY_BAR_TERMINAL_BAR_MODE=sextant3 \
+    "${REPO_ROOT}/bin/showy-bar-tmux-bar"
+)
+assert_contains "tmux sextant3 stale shows trailing stale indicator" "#[fg=#161616,bg=#161616] #[default]#[fg=#ee5396,bg=#161616,bold]⚠" "${out}"
+assert_contains "tmux sextant3 greys stale sextant cells" "#[fg=#6c7086,bg=#2a2a2a]🬎" "${out}"
+assert_contains "tmux sextant3 keeps separator on stale background" "#[fg=#161616,bg=#6c7086]▕" "${out}"
+assert_not_contains "tmux sextant3 stale omits half-block cells" "▀" "${out}"
+assert_not_contains "tmux sextant3 stale has no elapsed marker" "be95ff" "${out}"
 
 stale_past_fixture="${TMP}/codexbar-stale-past.json"
 printf '%s\n' '[{"provider":"claude","usage":{"primary":{"usedPercent":17,"windowMinutes":300,"resetsAt":"1988-01-01T00:00:00Z"}}}]' > "${stale_past_fixture}"

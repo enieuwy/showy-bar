@@ -16,6 +16,15 @@ in the lower half. Colors are emitted as tmux `#[fg=#RRGGBB,bg=#RRGGBB]`
 markup; the markup is longer than the visible strip but does not consume
 status-line columns.
 
+Set `SHOWY_BAR_TERMINAL_BAR_MODE=sextant3` to replace the half-block body with
+Unicode sextant/block mosaic glyphs (`🬂`, `🬋`, `🬭`, `🬎`, `🬰`, `🬹`, `█`).
+That mode encodes primary, secondary, and tertiary as top/middle/bottom thirds
+inside the same status-line row. tmux still gives each cell only one
+foreground/background pair, so `sextant3` colors a filled cell by the
+bottom-most filled row (tertiary over secondary over primary) and omits elapsed
+markers. It requires a font with Unicode Symbols for Legacy Computing
+U+1FB00–U+1FB3B.
+
 When the cache is older than `2 × SHOWY_BAR_REFRESH_SECONDS`, tmux gets one
 trailing `SHOWY_BAR_STALE_GLYPH` (default `⚠`) after the last provider. The
 cap glyphs, sigil background, separator, bar fill cells, and countdown

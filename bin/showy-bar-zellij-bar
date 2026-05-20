@@ -130,6 +130,42 @@ dual_metric_bar() {
     style_text '▏' "${bg_color}" "${surface_color}"
 }
 
+tri_metric_bar() {
+    local p_remaining="$1" s_remaining="$2" t_remaining="$3"
+    local primary_override="${4:-}" secondary_override="${5:-}" tertiary_override="${6:-}"
+    local width="${SHOWY_BAR_ZELLIJ_BAR_WIDTH:-12}"
+    [[ "${width}" =~ ^[0-9]+$ ]] || width=12
+    (( width < 8 )) && width=8
+
+    local primary_color secondary_color tertiary_color bg_color surface_color
+    primary_color="${primary_override:-$(showy_bar_role_color primary "${p_remaining}")}"
+    secondary_color="${secondary_override:-$(showy_bar_role_color secondary "${s_remaining}")}"
+    tertiary_color="${tertiary_override:-$(showy_bar_role_color tertiary "${t_remaining}")}"
+    bg_color=$(showy_bar_palette bg)
+    surface_color=$(showy_bar_palette surface)
+
+    local p_fill s_fill t_fill i mask char cell_color
+    p_fill=$(showy_bar_filled_cells "${p_remaining}" "${width}")
+    s_fill=$(showy_bar_filled_cells "${s_remaining}" "${width}")
+    t_fill=$(showy_bar_filled_cells "${t_remaining}" "${width}")
+
+    for (( i=0; i<width; i++ )); do
+        mask=0
+        (( i < p_fill )) && mask=$((mask | 1))
+        (( i < s_fill )) && mask=$((mask | 2))
+        (( i < t_fill )) && mask=$((mask | 4))
+        char=$(showy_bar_sextant_mask_char "${mask}")
+
+        if (( mask & 4 )); then cell_color="${tertiary_color}"
+        elif (( mask & 2 )); then cell_color="${secondary_color}"
+        elif (( mask & 1 )); then cell_color="${primary_color}"
+        else cell_color="${surface_color}"; fi
+
+        style_text "${char}" "${cell_color}" "${surface_color}"
+    done
+    style_text '▏' "${bg_color}" "${surface_color}"
+}
+
 # ── data load ────────────────────────────────────────────────────────
 
 if [[ -n "${json_input}" ]]; then
@@ -158,7 +194,7 @@ if (( count == 0 )); then
 fi
 
 # Stale = cache is older than 2x the refresh interval; render quota state
-# as last-known data with a single leading frozen-snapshot marker.
+# as last-known data with a single trailing frozen-snapshot marker.
 stale=0
 if [[ -z "${json_input}" ]] && showy_bar_cache_stale_for "${SHOWY_BAR_USAGE_FILE}"; then
     stale=1
@@ -181,20 +217,27 @@ rows=$(printf '%s' "${filtered}" | jq -r '
         (.usage.primary.windowMinutes // ""),
         pct(.usage.secondary.usedPercent),
         (.usage.secondary.resetsAt // .usage.secondary.resetDescription // ""),
-        (.usage.secondary.windowMinutes // "")
+        (.usage.secondary.windowMinutes // ""),
+        pct(.usage.tertiary.usedPercent),
+        (.usage.tertiary.resetsAt // .usage.tertiary.resetDescription // ""),
+        (.usage.tertiary.windowMinutes // "")
     ] | map(tostring) | join("\u001f")')
 
 first_chunk=1
 chunk_bg=$(showy_bar_palette bg)
 stale_color=$(showy_bar_palette stale)
 countdown_warn=$(showy_bar_palette countdown_warn)
-while IFS=$'\x1f' read -r provider p_used p_reset _p_window s_used s_reset s_window; do
+while IFS=$'\x1f' read -r provider p_used p_reset _p_window s_used s_reset s_window t_used _t_reset _t_window; do
     [[ -n "${provider}" ]] || continue
 
     p_remaining=$((100 - p_used))
     s_remaining=0
     if (( s_used >= 0 )); then
         s_remaining=$((100 - s_used))
+    fi
+    t_remaining=0
+    if (( t_used >= 0 )); then
+        t_remaining=$((100 - t_used))
     fi
 
     sigil=$(showy_bar_provider_sigil "${provider}")
@@ -231,16 +274,22 @@ while IFS=$'\x1f' read -r provider p_used p_reset _p_window s_used s_reset s_win
     surface_color=$(showy_bar_palette surface)
     primary_color=$(showy_bar_role_color primary "${p_remaining}")
     secondary_color=$(showy_bar_role_color secondary "${s_remaining}")
+    tertiary_color=$(showy_bar_role_color tertiary "${t_remaining}")
     if (( stale )); then
         primary_color="${stale_color}"
         secondary_color="${stale_color}"
+        tertiary_color="${stale_color}"
     fi
     separator_fg="${chunk_bg}"
     separator_bg="${primary_color}"
     style_text "${CAP_LEFT}" "${primary_color}" "${chunk_bg}"
     style_text "${sigil}" "${chunk_bg}" "${primary_color}" bold
     style_text '▕' "${separator_fg}" "${separator_bg}"
-    dual_metric_bar "${p_remaining}" "${s_remaining}" "${marker_reset}" "${marker_window}" "${primary_color}" "${secondary_color}"
+    if [[ "${SHOWY_BAR_TERMINAL_BAR_MODE}" == "sextant3" ]]; then
+        tri_metric_bar "${p_remaining}" "${s_remaining}" "${t_remaining}" "${primary_color}" "${secondary_color}" "${tertiary_color}"
+    else
+        dual_metric_bar "${p_remaining}" "${s_remaining}" "${marker_reset}" "${marker_window}" "${primary_color}" "${secondary_color}"
+    fi
     style_text "${countdown}" "${time_color}" "${surface_color}" bold
     style_text "${CAP_RIGHT}" "${surface_color}" "${chunk_bg}"
 done <<< "${rows}"

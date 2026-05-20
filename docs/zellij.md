@@ -15,6 +15,14 @@
 | **bar** | 12 cells of upper-half blocks (`▀`). Foreground is the primary/5h window; background is the secondary/7d window. The secondary elapsed marker is drawn with `SHOWY_BAR_PALETTE_ELAPSED` in the lower half. |
 | **countdown** | Compact like `12m`, `4h`, `4:31`, `2d`, `5w`, or `?` if the provider does not expose a primary reset time. Normal labels use `SHOWY_BAR_PALETTE_COUNTDOWN`; urgent labels use `SHOWY_BAR_PALETTE_COUNTDOWN_WARN`. |
 
+Set `SHOWY_BAR_TERMINAL_BAR_MODE=sextant3` to replace the half-block bar body
+with Unicode sextant/block mosaic glyphs (`🬂`, `🬋`, `🬭`, `🬎`, `🬰`, `🬹`,
+`█`). That mode encodes primary, secondary, and tertiary as top/middle/bottom
+thirds inside the same terminal row. A terminal cell still has only one
+foreground/background pair, so `sextant3` colors a filled cell by the
+bottom-most filled row (tertiary over secondary over primary) and omits elapsed
+markers.
+
 When the cache is older than `2 × SHOWY_BAR_REFRESH_SECONDS`, the strip gets
 one trailing `SHOWY_BAR_STALE_GLYPH` (default `⚠`) after the last provider.
 The cap glyphs, sigil background, separator, bar fill cells, and countdown
@@ -38,8 +46,10 @@ Powerline-Extra font for the U+E0A0–U+E0D4 range, or set either
 alternatives are `` / `` (slant) and `` / ``
 (flame).
 
-The bar body itself uses only Unicode Block Elements (`▀`,
-`▕`, `▏`), which every monospace font carries.
+The default bar body itself uses only Unicode Block Elements (`▀`,
+`▕`, `▏`), which every monospace font carries. The opt-in `sextant3`
+mode also requires a font with Unicode Symbols for Legacy Computing
+U+1FB00–U+1FB3B.
 
 ## Pipe vs command widget
 
