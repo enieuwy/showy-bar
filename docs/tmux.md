@@ -2,19 +2,23 @@
 
 ## Output shape
 
-`bin/showy-bar-tmux-bar` emits tmux-format markup. Format per provider:
+`bin/showy-bar-tmux-bar` emits tmux-format markup with the same visible
+provider chunks as the Zellij strip:
 
-```
-<SIGIL> <8-cell primary bar> <countdown>[ w]
+```text
+<SIGIL>▕<12-cell primary/secondary half-block bar>▏<countdown>
 ```
 
-The bar is primary-window remaining usage only. When the secondary window has
-less remaining usage than primary, a colored `w` hint is appended after the
-countdown. Colors are emitted as `#[fg=#RRGGBB]` / `#[bold]` / `#[default]`.
+The bar uses upper-half blocks (`▀`) so each full-height terminal cell carries
+two windows: foreground is the primary window, background is the secondary
+window. The secondary elapsed marker is drawn with `SHOWY_BAR_PALETTE_ELAPSED`
+in the lower half. Colors are emitted as tmux `#[fg=#RRGGBB,bg=#RRGGBB]`
+markup; the markup is longer than the visible strip but does not consume
+status-line columns.
 
 When the cache is older than `2 × SHOWY_BAR_REFRESH_SECONDS`, quota colors
 remain the last-known values and each countdown is rendered as `?` using
-`SHOWY_BAR_PALETTE_COUNTDOWN_WARN`; the secondary `w` hint is suppressed.
+`SHOWY_BAR_PALETTE_COUNTDOWN_WARN`; elapsed markers are hidden.
 
 ## status-right
 
@@ -22,12 +26,23 @@ Append to your existing `status-right` so `showy-bar` cohabits with
 whatever else you display:
 
 ```tmux
+set -g status-right-length 300
 if -F '#{m:*showy-bar-tmux-bar*,#{status-right}}' '' 'set -ag status-right " #(/Users/REPLACE_ME/.local/bin/showy-bar-tmux-bar)"'
 ```
 
 Use the absolute path to `showy-bar-tmux-bar`; tmux's startup PATH often
 does not include `~/.local/bin`. The guard prevents duplicate segments
 when `.tmux.conf` is sourced repeatedly.
+
+For a clean standalone preview, remove tmux's default green status styling:
+
+```tmux
+set -g status-right-length 300
+set -g status-style 'fg=default,bg=default'
+set -g status-left ''
+set -g window-status-format ''
+set -g window-status-current-format ''
+```
 
 ## Refresh interval
 

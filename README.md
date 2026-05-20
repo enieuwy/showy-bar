@@ -1,24 +1,31 @@
 # showy-bar
 
+Always-on AI coding-quota strips for **[SketchyBar](https://github.com/FelixKratz/SketchyBar)**, **[Zellij](https://github.com/zellij-org/zellij)**, and **[tmux](https://github.com/tmux/tmux)**,
+driven by [CodexBar](https://github.com/steipete/CodexBar).
+
+Beautiful, themeable, minimal.
+
 <p align="center">
   <img src="docs/images/hero-desktop.png" alt="showy-bar running across SketchyBar and a Zellij terminal on macOS" width="960">
 </p>
+
+<p align="center"><sub>showy-bar running across SketchyBar and a Zellij terminal on macOS</sub></p>
+
+<br>
 
 <p align="center">
   <img src="docs/images/hero-termius.png" alt="showy-bar zellij strip running inside Termius on iPhone 16 Pro, showing four AI provider countdowns" width="720">
 </p>
 
-<p align="center"><sub>showy-bar's Zellij strip on an iPhone — four AI providers, real quotas, mid-session.</sub></p>
+<p align="center"><sub>showy-bar's Zellij strip on an iPhone — four AI providers, real quotas, mid-session</sub></p>
 
-Always-on AI coding-quota strips for **SketchyBar**, **Zellij**, and **tmux**,
-driven by [CodexBar](https://github.com/steipete/CodexBar) CLI JSON or its
-localhost `codexbar serve` endpoint.
+---
 
 CodexBar handles every provider's auth, cookies, OAuth, parsing, and caching.
 This repo's only job is to render its JSON in three places:
 
 ```
-codexbar usage --format json     or     codexbar serve → http://127.0.0.1:8080/usage
+codexbar serve → http://127.0.0.1:8080/usage
        │
        ▼
 bin/showy-bar-fetch     ←  shared cache + flock + last-known-good
@@ -32,6 +39,13 @@ bin/showy-bar-fetch     ←  shared cache + flock + last-known-good
 No provider auth code, no extra config beyond a single optional env file. By
 default, showy-bar probes `http://127.0.0.1:8080/usage` for `codexbar serve`
 and falls back to spawning the CLI on refresh.
+
+### Features
+- **Zero auth/config:** Relies entirely on CodexBar for credentials and parsing.
+- **Provider status (SketchyBar):** Icons automatically tint yellow (minor/maintenance) or red (major/critical) during an outage. Clicking a degraded icon opens the provider's official status page.
+- **Pacing & thresholds:** Renders proportional pacing markers and color-codes usage (good/warn/bad) based on configurable remaining-quota and time thresholds.
+- **Themeable:** Ships with Catppuccin, Nord, Dracula, Tokyo Night, and others.
+- **Low overhead:** A single cached fetcher serves every running bar.
 
 ## Quickstart
 
@@ -152,6 +166,7 @@ Reload Zellij to pick up the new layout/keybind, then start the pipe loop.
 # Use the absolute path — tmux's PATH at server start typically lacks ~/.local/bin.
 CB_BIN="$HOME/.local/bin"
 cat >> ~/.tmux.conf <<TMUX
+set -g status-right-length 300
 if -F '#{m:*showy-bar-tmux-bar*,#{status-right}}' '' 'set -ag status-right " #(${CB_BIN}/showy-bar-tmux-bar)"'
 bind-key "/" display-popup -E -h 36 -w 92 -T "CodexBar usage" 'config="\${XDG_CONFIG_HOME:-\$HOME/.config}/showy-bar/config.env"; [ -r "\$config" ] && . "\$config"; while :; do clear; "\${SHOWY_BAR_CODEXBAR_BIN:-codexbar}" usage; sleep 30; done'
 TMUX
@@ -262,15 +277,13 @@ icon/row layout. Terminal previews show the deterministic
 - `codexbar` runs from a GUI macOS app bundle; cookie-based providers
   need Full Disk Access in System Settings → Privacy & Security to
   decrypt browser cookies.
-- The strip omits CodexBar's `tertiary` window for tmux/Zellij. Zellij shows
-  primary over secondary in a single half-block strip; tmux remains primary-only
-  with the compact secondary hint.
-  SketchyBar shows up to three stacked bars when the provider exposes a
-  tertiary window.
-- **Stale-cache dimming is terminal-only.** When the cache is older than
-  `2 × SHOWY_BAR_REFRESH_SECONDS`, the Zellij and tmux strips dim every
-  provider chunk. SketchyBar continues to render at full strength —
-  CodexBar's own menu icon will reflect upstream incidents.
+- Terminal strips omit CodexBar's `tertiary` window. Zellij and tmux show
+  primary over secondary in a single half-block strip. SketchyBar shows up to
+  three stacked bars when the provider exposes a tertiary window.
+- **Stale-cache degradation is terminal-only.** When the cache is older than
+  `2 × SHOWY_BAR_REFRESH_SECONDS`, Zellij and tmux keep last-known quota colors
+  but render countdowns as `?` and hide elapsed markers. SketchyBar continues
+  to render at full strength from the cache.
 - No Linux-side provider for browser-cookie providers — same constraint
   as CodexBar itself.
 

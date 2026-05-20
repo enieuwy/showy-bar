@@ -116,6 +116,40 @@ showy_bar_block_bar() {
     printf '%s' "${out}"
 }
 
+# Width-aware fill count for compact strip renderers.
+# Args: $1 = remaining percent, $2 = number of cells.
+showy_bar_filled_cells() {
+    local remaining="${1:-0}" width="$2"
+    [[ "${remaining}" =~ ^-?[0-9]+$ ]] || remaining=0
+    (( remaining < 0 )) && remaining=0
+    (( remaining > 100 )) && remaining=100
+    local filled=$(( (remaining * width) / 100 ))
+    (( remaining > 0 && filled == 0 )) && filled=1
+    printf '%s\n' "${filled}"
+}
+
+# Pacing marker cell for a reset window. Returns non-zero when no marker
+# can be computed.
+# Args: $1 = reset timestamp/description, $2 = window minutes, $3 = width.
+showy_bar_elapsed_marker_cell() {
+    local reset_at="$1" window_minutes="$2" width="$3"
+    [[ -n "${reset_at}" && "${window_minutes}" =~ ^[0-9]+$ ]] || return 1
+    (( window_minutes > 0 )) || return 1
+
+    local reset_epoch duration start_epoch now elapsed marker
+    reset_epoch=$(showy_bar_reset_epoch "${reset_at}") || return 1
+    duration=$((window_minutes * 60))
+    start_epoch=$((reset_epoch - duration))
+    now=$(showy_bar_now_epoch)
+    elapsed=$((now - start_epoch))
+    (( elapsed < 0 )) && elapsed=0
+    (( elapsed > duration )) && elapsed="${duration}"
+    marker=$(( (duration - elapsed) * width / duration ))
+    (( marker < 0 )) && marker=0
+    (( marker >= width )) && marker=$((width - 1))
+    printf '%s\n' "${marker}"
+}
+
 # Choose the dominant color for a provider record (uses the lowest of all
 # windows' remaining-percents).
 showy_bar_provider_color_key() {

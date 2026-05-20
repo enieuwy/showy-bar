@@ -131,4 +131,5 @@ are not rasterized.
 
 ## Caveats
 
-- The plugin does not dim when the cache is stale. Zellij and tmux do.
+- The plugin does not change styling when the cache is stale; Zellij and tmux
+  degrade stale terminal strips by rendering countdowns as `?`.

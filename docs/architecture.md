@@ -69,7 +69,7 @@ CodexBar's text UI, not the compact cache-backed renderer output.
 | CodexBar CLI returns non-JSON               | Cache is **not** updated; previous value still served|
 | CodexBar JSON fails `jq` validation           | Same — preserve last good cache                      |
 | Cache file missing and every refresh path fails | Fetcher exits non-zero; renderers print `AI ?`     |
-| Cache age > `2 × SHOWY_BAR_REFRESH_SECONDS`     | Zellij + tmux dim every provider; SketchyBar unchanged |
+| Cache age > `2 × SHOWY_BAR_REFRESH_SECONDS`     | Zellij + tmux render countdowns as `?`; SketchyBar unchanged |
 
 ## Why bash and not Python/Go/Rust
 

@@ -94,34 +94,6 @@ style_text() {
     reset
 }
 
-filled_cells() {
-    local remaining="${1:-0}" width="$2"
-    [[ "${remaining}" =~ ^-?[0-9]+$ ]] || remaining=0
-    (( remaining < 0 )) && remaining=0
-    (( remaining > 100 )) && remaining=100
-    local filled=$(( (remaining * width) / 100 ))
-    (( remaining > 0 && filled == 0 )) && filled=1
-    printf '%s\n' "${filled}"
-}
-
-elapsed_marker_cell() {
-    local reset_at="$1" window_minutes="$2" width="$3"
-    [[ -n "${reset_at}" && "${window_minutes}" =~ ^[0-9]+$ ]] || return 1
-    (( window_minutes > 0 )) || return 1
-
-    local reset_epoch duration start_epoch now elapsed marker
-    reset_epoch=$(showy_bar_reset_epoch "${reset_at}") || return 1
-    duration=$((window_minutes * 60))
-    start_epoch=$((reset_epoch - duration))
-    now=$(showy_bar_now_epoch)
-    elapsed=$((now - start_epoch))
-    (( elapsed < 0 )) && elapsed=0
-    (( elapsed > duration )) && elapsed="${duration}"
-    marker=$(( (duration - elapsed) * width / duration ))
-    (( marker < 0 )) && marker=0
-    (( marker >= width )) && marker=$((width - 1))
-    printf '%s\n' "${marker}"
-}
 
 dual_metric_bar() {
     local p_remaining="$1" s_remaining="$2" s_reset="$3" s_window="$4"
@@ -137,9 +109,9 @@ dual_metric_bar() {
     elapsed_color=$(showy_bar_palette elapsed)
 
     local p_fill s_fill marker i top_color bottom_color
-    p_fill=$(filled_cells "${p_remaining}" "${width}")
-    s_fill=$(filled_cells "${s_remaining}" "${width}")
-    marker=$(elapsed_marker_cell "${s_reset}" "${s_window}" "${width}" || true)
+    p_fill=$(showy_bar_filled_cells "${p_remaining}" "${width}")
+    s_fill=$(showy_bar_filled_cells "${s_remaining}" "${width}")
+    marker=$(showy_bar_elapsed_marker_cell "${s_reset}" "${s_window}" "${width}" || true)
 
     for (( i=0; i<width; i++ )); do
         if (( i < p_fill )); then top_color="${primary_color}"

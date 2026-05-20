@@ -628,10 +628,13 @@ assert_not_contains "zellij --json stdin skips stale dimming" "${ansi_dim}" "${o
 printf '\ntmux renderer\n'
 
 out=$(run_renderer showy-bar-tmux-bar codexbar-mixed.json)
-assert_contains "tmux markup uses #[bold]"             "#[bold]" "${out}"
+assert_contains "tmux markup applies bold style"        "bold]" "${out}"
 assert_contains "tmux markup names claude sigil"       "CL"      "${out}"
 assert_contains "tmux markup uses #[default] reset"    "#[default]" "${out}"
-assert_contains "tmux weekly hint uses derived secondary color" "#[fg=#14683a]w" "${out}"
+assert_contains "tmux uses zellij powerline left cap"  "" "${out}"
+assert_contains "tmux uses half-block primary/secondary cells" "▀" "${out}"
+assert_contains "tmux uses derived secondary background color" "bg=#14683a" "${out}"
+assert_not_contains "tmux no longer emits weekly hint glyph" "]w" "${out}"
 
 out=$(run_renderer showy-bar-tmux-bar codexbar-empty.json)
 assert_contains "tmux empty fixture renders 'AI idle'" "AI idle" "${out}"
@@ -1271,8 +1274,8 @@ out=$(
     "${REPO_ROOT}/bin/showy-bar-tmux-bar"
 )
 assert_not_contains "tmux does not dim stale cache" "#[dim]" "${out}"
-assert_contains "tmux stale countdown uses warn palette" "#[fg=#ee5396]?" "${out}"
-assert_not_contains "tmux stale cache suppresses weekly hint" "]w" "${out}"
+assert_contains "tmux stale countdown uses warn palette" "#[fg=#ee5396,bg=#2a2a2a,bold]?" "${out}"
+assert_not_contains "tmux stale cache has no weekly hint" "]w" "${out}"
 
 stale_past_fixture="${TMP}/codexbar-stale-past.json"
 printf '%s\n' '[{"provider":"claude","usage":{"primary":{"usedPercent":17,"windowMinutes":300,"resetsAt":"1988-01-01T00:00:00Z"}}}]' > "${stale_past_fixture}"

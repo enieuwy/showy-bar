@@ -11,6 +11,6 @@
 # Optional global settings (uncomment to taste):
 # set -g status-position top
 # set -g status-interval 30
-# set -g status-right-length 200
+# set -g status-right-length 300
 
 if -F '#{m:*showy-bar-tmux-bar*,#{status-right}}' '' 'set -ag status-right " #(/Users/REPLACE_ME/.local/bin/showy-bar-tmux-bar)"'
