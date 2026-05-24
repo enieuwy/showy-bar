@@ -20,11 +20,19 @@ must not make the existing SketchyBar or tmux integrations worse.
 
 The only plugin paths worth the implementation lift are:
 
-1. **Path 3: Rust-native Zellij plugin using `showy-bar-fetch` as the cache/data
+1. **Path 5: Headless companion plugin (recommended first step).** A
+   `load_plugins` background plugin that subscribes to `TabUpdate`, `Visible`,
+   and `Timer`, and pushes the cached strip into the existing zjstatus
+   `pipe_showy_bar` widget via `pipe_message_to_plugin`. Same data plane as
+   today; eliminates the external feeder and first-paint friction without
+   owning the status row. Validated by [b0o/zjstatus-hints](https://github.com/b0o/zjstatus-hints),
+   which has shipped the same architecture for the keybind-hints use case.
+2. **Path 3: Rust-native Zellij plugin using `showy-bar-fetch` as the cache/data
    helper.** The plugin owns Zellij lifecycle, parsing, and rendering, while the
    existing shell helper continues to own CodexBar invocation, cache locking,
-   validation, and last-known-good semantics.
-2. **Path 4: Shared Rust core plus native Zellij plugin and target adapters.** A
+   validation, and last-known-good semantics. Picks up users who reject the
+   zjstatus dependency entirely.
+3. **Path 4: Shared Rust core plus native Zellij plugin and target adapters.** A
    new Rust core owns schema, filtering, palette, countdown, and render math;
    the Zellij plugin and future adapters reuse it.
 
@@ -77,6 +85,17 @@ before implementation, but they are the design assumptions:
   reading arbitrary home-cache paths may require broader access. Avoid that
   permission in the first design.
 
+- `pipe_message_to_plugin` lets one plugin push messages into another's `Pipe`
+  event handler. It is gated by `PermissionType::MessageAndLaunchOtherPlugins`
+  and is the mechanism a headless companion plugin would use to push the strip
+  into the existing zjstatus `pipe_showy_bar` widget.
+- Plugins loaded via `load_plugins` that call `request_permission` show their
+  permission prompt in a floating pane that is hidden by default. The pane
+  title is prefixed `(.) - <plugin-name>` while the prompt is pending. Users
+  must reveal the floating panes once or pre-grant via `permissions.kdl`. This
+  is the failure mode of any future native showy-bar companion plugin and must
+  be documented in install instructions, not assumed away.
+
 ## Product and community framing
 
 A Zellij plugin should be marketed around the thing Zellij users get, not around
@@ -104,10 +123,70 @@ Do not pretend this is generic if it depends on CodexBar. A future generic data
 source can be added through explicit configuration once users ask for it. The
 first plugin should be honest: it renders CodexBar quota data for Zellij.
 
+## Path 5: Headless companion plugin
+
+Path 5 is the smallest plugin worth shipping. It is a `load_plugins` background
+plugin that subscribes to Zellij application-state events and pushes the cached
+strip into the existing zjstatus `pipe_showy_bar` widget. It does not own a
+row, does not replace zjstatus, and does not need `RunCommands` — it consumes
+the same on-disk cache that `bin/showy-bar-fetch` already produces.
+
+### Shape
+
+```text
+Zellij plugin (headless, no visible pane)
+  ├─ load_plugins on session start
+  ├─ subscribes to TabUpdate, Visible, Timer, PermissionRequestResult
+  ├─ on TabUpdate or Visible: read cache → render ANSI → pipe_message_to_plugin
+  ├─ on Timer (every SHOWY_BAR_ZELLIJ_PIPE_INTERVAL): same
+  └─ never renders into its own pane
+```
+
+The pipe payload uses the same `zjstatus::pipe::pipe_<name>::<output>` envelope
+that `showy-bar-zellij-pipe` already produces, so the existing layout fragment
+needs no change.
+
+### Why this path
+
+- **Solves first-paint without owning the row.** `TabUpdate` fires when a new
+  tab is created or focused; the plugin pipes the strip into zjstatus before
+  the user sees the empty widget. This is the documented friction in the
+  current baseline above.
+- **Removes the external feeder process.** `showy-bar-zellij-pipe` becomes
+  optional; the plugin's `Timer` subscription handles periodic refresh on the
+  same interval.
+- **Removes the kick/new-tab wrappers from the native path.** No more
+  `showy-bar-zellij-{kick,new-tab}` for users on this path. Terminal-emulator
+  keybinds can call plain `zellij action new-tab` again.
+- **Validated pattern.** [b0o/zjstatus-hints](https://github.com/b0o/zjstatus-hints)
+  ships exactly this shape — `load_plugins` headless plugin, subscribes to
+  `ModeUpdate`, pushes via `pipe_message_to_plugin` into a named zjstatus pipe
+  widget. The mechanism is known to work end-to-end against zjstatus today.
+- **Smallest permission footprint.** `ReadApplicationState` (for `TabUpdate`)
+  and `MessageAndLaunchOtherPlugins` (for `pipe_message_to_plugin`). No
+  `RunCommands`, no `FullHdAccess`, no `ChangeApplicationState`.
+
+### Tradeoffs vs Path 3
+
+- Still depends on zjstatus. Users who reject zjstatus need Path 3.
+- Still needs the on-disk cache. Either `showy-bar-fetch` runs out-of-band on a
+  timer (cron, launchd, terminal wrapper) or the plugin gains `RunCommands` to
+  invoke it — at which point most of Path 3's complexity has crept in.
+- Permission prompt for `load_plugins` headless plugins appears in a hidden
+  floating pane (see the facts list above). Install instructions must explain
+  pre-granting via `permissions.kdl` and the `(.) - <name>` pane-title cue.
+
+### When to prefer Path 3 over Path 5
+
+Pick Path 3 when the user-facing goal is "users do not need zjstatus." Pick
+Path 5 first when the goal is "users with zjstatus get auto-paint, no external
+feeder, and no kick wrappers." Path 5 does not block Path 3 later; they share
+no rendering code and can ship as two separate artifacts.
+
 ## Path 3: Rust-native plugin, existing fetch helper
 
-Path 3 is the smallest implementation that produces a genuinely better Zellij
-experience without rewriting the data plane.
+Path 3 is the smallest implementation that removes the zjstatus dependency
+without rewriting the data plane.
 
 ### Shape
 

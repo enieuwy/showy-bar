@@ -118,3 +118,67 @@ pane sources `${XDG_CONFIG_HOME:-$HOME/.config}/showy-bar/config.env` when it
 exists, then runs `while :; do clear;
 "${SHOWY_BAR_CODEXBAR_BIN:-codexbar}" usage; sleep 30; done`. CodexBar's text
 mode is the detail view — there is no custom detail-watch in this repo.
+
+## Composing with other zjstatus consumers
+
+`pipe_showy_bar` is one zjstatus widget; a zjstatus instance accepts many.
+The shipped `zellij/layout-pane.kdl.fragment` leaves `format_right` empty so
+users can drop other pipe widgets in alongside the showy-bar strip without
+editing `format_left`.
+
+The leading example is [b0o/zjstatus-hints](https://github.com/b0o/zjstatus-hints),
+which renders mode-aware keybinding hints. It runs as a background plugin
+loaded via `load_plugins` and pushes its output into a named zjstatus pipe via
+`pipe_message_to_plugin`. To combine the two, modify your personal layout (do
+not edit the shipped fragment, which assumes no companion plugins):
+
+```kdl
+plugin location="file:~/.config/zellij/plugins/zjstatus.wasm" {
+    pipe_showy_bar_format        "{output}"
+    pipe_showy_bar_rendermode    "raw"
+    pipe_zjstatus_hints_format   "{output}"
+
+    format_left  "{pipe_showy_bar}"
+    format_right "{pipe_zjstatus_hints}"
+}
+```
+
+Then register the companion in `~/.config/zellij/config.kdl`:
+
+```kdl
+plugins {
+    // ...existing aliases
+    zjstatus-hints location="file:~/.config/zellij/plugins/zjstatus-hints.wasm" {
+        hide_in_base_mode false
+    }
+}
+load_plugins {
+    zjstatus-hints
+}
+```
+
+### Permission gotcha for `load_plugins` companions
+
+Any plugin loaded via `load_plugins` that calls `request_permission` (most do —
+`ReadApplicationState` and `MessageAndLaunchOtherPlugins` are common) shows a
+permission prompt in a floating pane that is hidden by default. The pane title
+is prefixed `(.) - <plugin-name>` while the prompt is pending; the plugin is
+loaded but inert until granted. Two ways to resolve:
+
+- **Pre-grant once** by adding the WASM path to
+  `~/Library/Caches/org.Zellij-Contributors.Zellij/permissions.kdl` (macOS) or
+  the equivalent Linux cache path, listing the permissions the plugin requests.
+  The prompt is then skipped on every future session. Example for
+  `zjstatus-hints`:
+
+  ```kdl
+  "/Users/you/.config/zellij/plugins/zjstatus-hints.wasm" {
+      ReadApplicationState
+      MessageAndLaunchOtherPlugins
+  }
+  ```
+- **Reveal once** by toggling floating panes visible (default `Ctrl+p w`),
+  focusing the pending pane, granting, then hiding again.
+
+This is not zjstatus-hints-specific. It affects every `load_plugins` entry that
+requests permissions, including any future native showy-bar companion plugin.
