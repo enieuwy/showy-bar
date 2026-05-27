@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# showy-bar — SketchyBar bootstrap.
+# showy-quota — SketchyBar bootstrap.
 #
-# Source from sketchybarrc with:   source "$ITEM_DIR/showy_bar.sh"
+# Source from sketchybarrc with:   source "$ITEM_DIR/showy_quota.sh"
 #
 # IMPORTANT: this file is sourced from the user's sketchybarrc. We MUST
 # NOT leak `set -euo pipefail` to the caller — a later non-critical
@@ -32,11 +32,11 @@
     }
     REPO_ROOT="$(resolve_repo_root)"
 
-    if [[ -z "${SHOWY_BAR_SKETCHYBAR_PILL_RADIUS:-}" && -n "${PILL_RADIUS:-}" ]]; then
-        export SHOWY_BAR_SKETCHYBAR_PILL_RADIUS="${PILL_RADIUS}"
+    if [[ -z "${SHOWY_QUOTA_SKETCHYBAR_PILL_RADIUS:-}" && -n "${PILL_RADIUS:-}" ]]; then
+        export SHOWY_QUOTA_SKETCHYBAR_PILL_RADIUS="${PILL_RADIUS}"
     fi
-    if [[ -z "${SHOWY_BAR_SKETCHYBAR_PILL_HEIGHT:-}" && -n "${PILL_HEIGHT:-}" ]]; then
-        export SHOWY_BAR_SKETCHYBAR_PILL_HEIGHT="${PILL_HEIGHT}"
+    if [[ -z "${SHOWY_QUOTA_SKETCHYBAR_PILL_HEIGHT:-}" && -n "${PILL_HEIGHT:-}" ]]; then
+        export SHOWY_QUOTA_SKETCHYBAR_PILL_HEIGHT="${PILL_HEIGHT}"
     fi
 
     # shellcheck disable=SC1091
@@ -44,22 +44,22 @@
     # shellcheck disable=SC1091
     . "${REPO_ROOT}/lib/strip.sh"
 
-    # The plugin runs as a child process now, so export every showy-bar knob the
+    # The plugin runs as a child process now, so export every showy-quota knob the
     # user may have set in sketchybarrc before sourcing this bootstrap file.
     while IFS= read -r cb_var; do
         declare -gx "${cb_var}"
-    done < <(compgen -A variable SHOWY_BAR_)
+    done < <(compgen -A variable SHOWY_QUOTA_)
 
-    PLUGIN_PATH="${REPO_ROOT}/sketchybar/plugins/showy_bar.sh"
-    [[ -x "${PLUGIN_PATH}" ]] || PLUGIN_PATH="${PLUGIN_DIR:-}/showy_bar.sh"
+    PLUGIN_PATH="${REPO_ROOT}/sketchybar/plugins/showy_quota.sh"
+    [[ -x "${PLUGIN_PATH}" ]] || PLUGIN_PATH="${PLUGIN_DIR:-}/showy_quota.sh"
     [[ -n "${PLUGIN_PATH}" && -r "${PLUGIN_PATH}" ]] || exit 0
 
-    sketchybar --add item showy_bar.trigger left \
-               --set showy_bar.trigger \
+    sketchybar --add item showy_quota.trigger left \
+               --set showy_quota.trigger \
                    drawing=off \
                    updates=on \
-                   update_freq="${SHOWY_BAR_SKETCHYBAR_UPDATE_FREQ}" \
+                   update_freq="${SHOWY_QUOTA_SKETCHYBAR_UPDATE_FREQ}" \
                    script="${PLUGIN_PATH}"
 
-    SHOWY_BAR_SKETCHYBAR_FORCE_REDECLARE=1 "${PLUGIN_PATH}"
+    SHOWY_QUOTA_SKETCHYBAR_FORCE_REDECLARE=1 "${PLUGIN_PATH}"
 ) || true

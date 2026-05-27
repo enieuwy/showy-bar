@@ -33,7 +33,7 @@ jobs:
           jq --version
           shellcheck --version | head -n3
 
-      # showy-bar requires Homebrew bash on macOS, but the macOS image's
+      # showy-quota requires Homebrew bash on macOS, but the macOS image's
       # default /bin/bash is 3.2. Force-run make with the Homebrew bash from
       # brew install above by prepending its bin to PATH.
       - name: Set PATH (macOS Homebrew bash)

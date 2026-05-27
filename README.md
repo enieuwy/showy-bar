@@ -1,4 +1,4 @@
-# showy-bar
+# showy-quota
 
 Always-on AI plan quota strips for **[SketchyBar](https://github.com/FelixKratz/SketchyBar)**, **[Zellij](https://github.com/zellij-org/zellij)**, and **[tmux](https://github.com/tmux/tmux)**,
 driven by [CodexBar](https://github.com/steipete/CodexBar).
@@ -6,18 +6,18 @@ driven by [CodexBar](https://github.com/steipete/CodexBar).
 Beautiful, themeable, minimal.
 
 <p align="center">
-  <img src="docs/images/hero-desktop.png" alt="showy-bar running across SketchyBar and a Zellij terminal on macOS" width="960">
+  <img src="docs/images/hero-desktop.png" alt="showy-quota running across SketchyBar and a Zellij terminal on macOS" width="960">
 </p>
 
-<p align="center"><sub>showy-bar running across SketchyBar and a Zellij terminal on macOS</sub></p>
+<p align="center"><sub>showy-quota running across SketchyBar and a Zellij terminal on macOS</sub></p>
 
 <br>
 
 <p align="center">
-  <img src="docs/images/hero-termius.png" alt="showy-bar zellij strip running inside Termius on iPhone 16 Pro, showing four AI provider countdowns" width="720">
+  <img src="docs/images/hero-termius.png" alt="showy-quota zellij strip running inside Termius on iPhone 16 Pro, showing four AI provider countdowns" width="720">
 </p>
 
-<p align="center"><sub>showy-bar's Zellij strip on an iPhone — four AI providers, real quotas, mid-session</sub></p>
+<p align="center"><sub>showy-quota's Zellij strip on an iPhone — four AI providers, real quotas, mid-session</sub></p>
 
 ---
 
@@ -25,12 +25,12 @@ Beautiful, themeable, minimal.
 codexbar serve → http://127.0.0.1:8080/usage
        │
        ▼
-bin/showy-bar-fetch     ←  shared cache + flock + last-known-good
-       │  ~/.cache/showy-bar/usage.json
-       ├──► bin/showy-bar-state                 (stable provider/layout state JSON)
-       ├──► sketchybar/plugins/showy_bar.sh    (native SketchyBar rows + icons)
-       ├──► bin/showy-bar-zellij-bar           (ANSI strip for zjstatus pipe)
-       └──► bin/showy-bar-tmux-bar             (tmux #[…] markup for status-right)
+bin/showy-quota-fetch     ←  shared cache + flock + last-known-good
+       │  ~/.cache/showy-quota/usage.json
+       ├──► bin/showy-quota-state                 (stable provider/layout state JSON)
+       ├──► sketchybar/plugins/showy_quota.sh    (native SketchyBar rows + icons)
+       ├──► bin/showy-quota-zellij-bar           (ANSI strip for zjstatus pipe)
+       └──► bin/showy-quota-tmux-bar             (tmux #[…] markup for status-right)
 ```
 
 ### Features
@@ -52,12 +52,12 @@ bin/showy-bar-fetch     ←  shared cache + flock + last-known-good
 
    On macOS, cookie-based providers also need Full Disk Access for CodexBar in
    **System Settings → Privacy & Security**. If `jq length` prints `0`, fix
-   CodexBar before continuing — showy-bar has nothing to paint without it.
+   CodexBar before continuing — showy-quota has nothing to paint without it.
 
-2. **Install showy-bar.**
+2. **Install showy-quota.**
 
    ```sh
-   git clone https://github.com/enieuwy/showy-bar && cd showy-bar
+   git clone https://github.com/enieuwy/showy-quota && cd showy-quota
    make doctor                    # bash 4+, jq, codexbar present
    make install                   # symlinks bin/* into ~/.local/bin
    ```
@@ -68,10 +68,10 @@ bin/showy-bar-fetch     ←  shared cache + flock + last-known-good
 3. **Wire a UI.** Pick the UI(s) you use:
 
    - **SketchyBar:** `make install-sketchybar`, then add
-     `source "$ITEM_DIR/showy_bar.sh"` to your `sketchybarrc` and reload.
+     `source "$ITEM_DIR/showy_quota.sh"` to your `sketchybarrc` and reload.
    - **tmux:** paste the snippet in [tmux wiring](#tmux-wiring) into `~/.tmux.conf`.
    - **Zellij:** install `zjstatus.wasm`, paste the layout fragment, start
-     `showy-bar-zellij-pipe`. See [`docs/zellij.md`](docs/zellij.md).
+     `showy-quota-zellij-pipe`. See [`docs/zellij.md`](docs/zellij.md).
 
 ### SketchyBar wiring
 
@@ -81,7 +81,7 @@ defined:
 
 ```sh
 make install-sketchybar
-source "$ITEM_DIR/showy_bar.sh"
+source "$ITEM_DIR/showy_quota.sh"
 ```
 
 Then reload SketchyBar (`sketchybar --reload` or quit + relaunch) once to
@@ -96,8 +96,8 @@ Three pieces:
 1. **Widget pane** — paste `zellij/layout-pane.kdl.fragment` into your
    default layout. It declares the visible `zjstatus` pipe widget only.
    Install `zjstatus.wasm` first; see [`docs/zellij.md`](docs/zellij.md).
-2. **Pipe loop** — start `showy-bar-zellij-pipe` for each Zellij session
-   (for example, `ZELLIJ_SESSION_NAME=test showy-bar-zellij-pipe` from the
+2. **Pipe loop** — start `showy-quota-zellij-pipe` for each Zellij session
+   (for example, `ZELLIJ_SESSION_NAME=test showy-quota-zellij-pipe` from the
    terminal wrapper that launches the session).
 3. **Detail keybind** — paste `zellij/detail-pane.kdl.fragment` into your
    keybinds block. Default is `Alt /`.
@@ -111,8 +111,8 @@ Reload Zellij to pick up the new layout/keybind, then start the pipe loop.
 CB_BIN="$HOME/.local/bin"
 cat >> ~/.tmux.conf <<TMUX
 set -g status-right-length 300
-if -F '#{m:*showy-bar-tmux-bar*,#{status-right}}' '' 'set -ag status-right " #(${CB_BIN}/showy-bar-tmux-bar)"'
-bind-key "/" display-popup -E -h 36 -w 92 -T "CodexBar usage" 'config="\${XDG_CONFIG_HOME:-\$HOME/.config}/showy-bar/config.env"; [ -r "\$config" ] && . "\$config"; while :; do clear; "\${SHOWY_BAR_CODEXBAR_BIN:-codexbar}" usage; sleep 30; done'
+if -F '#{m:*showy-quota-tmux-bar*,#{status-right}}' '' 'set -ag status-right " #(${CB_BIN}/showy-quota-tmux-bar)"'
+bind-key "/" display-popup -E -h 36 -w 92 -T "CodexBar usage" 'config="\${XDG_CONFIG_HOME:-\$HOME/.config}/showy-quota/config.env"; [ -r "\$config" ] && . "\$config"; while :; do clear; "\${SHOWY_QUOTA_CODEXBAR_BIN:-codexbar}" usage; sleep 30; done'
 TMUX
 tmux source ~/.tmux.conf
 ```
@@ -138,12 +138,12 @@ provider:
   <img src="docs/images/mono3-terminal.png" alt="mono3 terminal rendering layout" width="420">
 </p>
 
-Customize terminal layout with `SHOWY_BAR_TERMINAL_BAR_MODE=dual|mono3|sextant3`.
+Customize terminal layout with `SHOWY_QUOTA_TERMINAL_BAR_MODE=dual|mono3|sextant3`.
 For `mono3` auto-mode selection and marker behavior, use
-`SHOWY_BAR_MONO3_PROVIDERS`, `SHOWY_BAR_MONO3_PROVIDERS_EXCLUDE`, and
-`SHOWY_BAR_MONO3_MARKER_SOURCE`.
+`SHOWY_QUOTA_MONO3_PROVIDERS`, `SHOWY_QUOTA_MONO3_PROVIDERS_EXCLUDE`, and
+`SHOWY_QUOTA_MONO3_MARKER_SOURCE`.
 
-Stuck? `bin/showy-bar --diagnose` (or `make diagnose`) prints exactly the
+Stuck? `bin/showy-quota --diagnose` (or `make diagnose`) prints exactly the
 state a bug report needs.
 
 ## Requirements
@@ -163,7 +163,7 @@ state a bug report needs.
   (`magick`). Native usage rows do not need `magick`.
 - The Zellij renderer wraps each provider chunk in Powerline-Extra end
   caps (U+E0B6 / U+E0B4). Any Nerd Font ships these; with a non-Nerd
-  font, set `SHOWY_BAR_CAP_LEFT=` / `SHOWY_BAR_CAP_RIGHT=` to blank
+  font, set `SHOWY_QUOTA_CAP_LEFT=` / `SHOWY_QUOTA_CAP_RIGHT=` to blank
   them. Terminal sextant modes have additional font notes in `docs/zellij.md`
   and `docs/tmux.md`.
 - Optional: `flock` for inter-process locking; falls back to an owner-scoped
@@ -171,7 +171,7 @@ state a bug report needs.
 
 ## Configuration
 
-Every script reads optional overrides from `~/.config/showy-bar/config.env`.
+Every script reads optional overrides from `~/.config/showy-quota/config.env`.
 The file is optional; create it only for values you want to override.
 
 Most users only need these; the full environment surface lives in
@@ -179,17 +179,17 @@ Most users only need these; the full environment surface lives in
 
 | Variable | Default | Effect |
 |---|---|---|
-| `SHOWY_BAR_THEME` | unset (default palette) | Load a named built-in or user palette. |
-| `SHOWY_BAR_PROVIDERS` | empty | Ordered provider allow-list; empty renders CodexBar's enabled providers. |
-| `SHOWY_BAR_PROVIDERS_EXCLUDE` | empty | Provider deny-list applied after the allow-list. |
-| `SHOWY_BAR_PROVIDER_ORDER` | `codex,claude,opencode,gemini` | Stable render order without filtering. |
-| `SHOWY_BAR_REFRESH_SECONDS` | `120` | Slow CLI fallback refresh interval. |
-| `SHOWY_BAR_CODEXBAR_SERVE_URL` | `http://127.0.0.1:8080` | Local `codexbar serve` base URL; set empty to skip HTTP probing. |
-| `SHOWY_BAR_CODEXBAR_SERVE_REFRESH_SECONDS` | `10` | Refresh interval when `codexbar serve` is available. |
-| `SHOWY_BAR_TIME_WARN_MINUTES` | `30` | Urgent countdown threshold. |
-| `SHOWY_BAR_SKETCHYBAR_CLICK` | `open -b com.steipete.codexbar` | Default SketchyBar click action; degraded icons open provider status URLs. |
+| `SHOWY_QUOTA_THEME` | unset (default palette) | Load a named built-in or user palette. |
+| `SHOWY_QUOTA_PROVIDERS` | empty | Ordered provider allow-list; empty renders CodexBar's enabled providers. |
+| `SHOWY_QUOTA_PROVIDERS_EXCLUDE` | empty | Provider deny-list applied after the allow-list. |
+| `SHOWY_QUOTA_PROVIDER_ORDER` | `codex,claude,opencode,gemini` | Stable render order without filtering. |
+| `SHOWY_QUOTA_REFRESH_SECONDS` | `120` | Slow CLI fallback refresh interval. |
+| `SHOWY_QUOTA_CODEXBAR_SERVE_URL` | `http://127.0.0.1:8080` | Local `codexbar serve` base URL; set empty to skip HTTP probing. |
+| `SHOWY_QUOTA_CODEXBAR_SERVE_REFRESH_SECONDS` | `10` | Refresh interval when `codexbar serve` is available. |
+| `SHOWY_QUOTA_TIME_WARN_MINUTES` | `30` | Urgent countdown threshold. |
+| `SHOWY_QUOTA_SKETCHYBAR_CLICK` | `open -b com.steipete.codexbar` | Default SketchyBar click action; degraded icons open provider status URLs. |
 
-Palette overrides use role-first keys such as `SHOWY_BAR_PALETTE_PRIMARY_*`.
+Palette overrides use role-first keys such as `SHOWY_QUOTA_PALETTE_PRIMARY_*`.
 Secondary and tertiary row colors auto-derive from the primary palette at
 `0.55` unless overridden; see `share/config.env.example` for the full palette
 surface.
@@ -218,7 +218,7 @@ make test        # smoke tests over JSON fixtures
 make diagnose    # printable bug-report state
 ```
 
-Cache lives at `${XDG_CACHE_HOME:-~/.cache}/showy-bar/usage.json`.
+Cache lives at `${XDG_CACHE_HOME:-~/.cache}/showy-quota/usage.json`.
 `make clean` clears it.
 
 ## How it stays cheap

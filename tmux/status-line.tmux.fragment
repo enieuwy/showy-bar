@@ -1,4 +1,4 @@
-# showy-bar — tmux status-right snippet.
+# showy-quota — tmux status-right snippet.
 #
 # Add to ~/.tmux.conf. This appends the CodexBar usage strip to the
 # existing status-right instead of replacing it.
@@ -13,4 +13,4 @@
 # set -g status-interval 30
 # set -g status-right-length 300
 
-if -F '#{m:*showy-bar-tmux-bar*,#{status-right}}' '' 'set -ag status-right " #(/Users/REPLACE_ME/.local/bin/showy-bar-tmux-bar)"'
+if -F '#{m:*showy-quota-tmux-bar*,#{status-right}}' '' 'set -ag status-right " #(/Users/REPLACE_ME/.local/bin/showy-quota-tmux-bar)"'

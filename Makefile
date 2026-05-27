@@ -1,4 +1,4 @@
-# showy-bar — install, uninstall, test.
+# showy-quota — install, uninstall, test.
 #
 # `make install` symlinks scripts into ~/.local/bin and the SketchyBar
 # pieces into ~/.config/sketchybar. It refuses to clobber files or retarget
@@ -15,7 +15,7 @@ SBAR_PLUGINS  ?= $(SKETCHYBAR)/plugins
 FORCE         ?= 0
 
 REPO          := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-BIN_NAMES     := showy-bar-fetch showy-bar-state showy-bar showy-bar-tmux-bar showy-bar-zellij-bar showy-bar-zellij-pipe showy-bar-zellij-kick showy-bar-zellij-new-tab
+BIN_NAMES     := showy-quota-fetch showy-quota-state showy-quota showy-quota-tmux-bar showy-quota-zellij-bar showy-quota-zellij-pipe showy-quota-zellij-kick showy-quota-zellij-new-tab
 
 .PHONY: help doctor diagnose install install-bin install-sketchybar install-all uninstall test lint clean
 
@@ -23,9 +23,9 @@ help: ## Show this help.
 	@awk 'BEGIN{FS=":.*##"}/^[a-zA-Z_-]+:.*##/{printf "  \033[36m%-20s\033[0m %s\n",$$1,$$2}' $(MAKEFILE_LIST)
 
 install: doctor install-bin ## Check prerequisites, then symlink shared scripts.
-	@printf '\nInstalled shared showy-bar scripts into $(BIN_DIR).\n'
+	@printf '\nInstalled shared showy-quota scripts into $(BIN_DIR).\n'
 	@printf 'Nothing is wired to a bar yet. Run one of:\n'
-	@printf '  make install-sketchybar      # then `source "$$ITEM_DIR/showy_bar.sh"`\n'
+	@printf '  make install-sketchybar      # then `source "$$ITEM_DIR/showy_quota.sh"`\n'
 	@printf '  cat tmux/status-line.tmux.fragment\n'
 	@printf '  cat zellij/layout-pane.kdl.fragment\n'
 
@@ -56,8 +56,8 @@ install-bin:
 install-sketchybar:
 	@mkdir -p "$(SBAR_ITEMS)" "$(SBAR_PLUGINS)"
 	@for pair in \
-		"$(REPO)/sketchybar/items/showy_bar.sh:$(SBAR_ITEMS)/showy_bar.sh" \
-		"$(REPO)/sketchybar/plugins/showy_bar.sh:$(SBAR_PLUGINS)/showy_bar.sh"; do \
+		"$(REPO)/sketchybar/items/showy_quota.sh:$(SBAR_ITEMS)/showy_quota.sh" \
+		"$(REPO)/sketchybar/plugins/showy_quota.sh:$(SBAR_PLUGINS)/showy_quota.sh"; do \
 		src=$${pair%%:*}; target=$${pair##*:}; \
 		if [ -L "$$target" ]; then \
 			cur=$$(readlink "$$target"); \
@@ -93,8 +93,8 @@ uninstall: ## Remove symlinks that this Makefile created.
 		fi; \
 	done
 	@for pair in \
-		"$(REPO)/sketchybar/items/showy_bar.sh:$(SBAR_ITEMS)/showy_bar.sh" \
-		"$(REPO)/sketchybar/plugins/showy_bar.sh:$(SBAR_PLUGINS)/showy_bar.sh"; do \
+		"$(REPO)/sketchybar/items/showy_quota.sh:$(SBAR_ITEMS)/showy_quota.sh" \
+		"$(REPO)/sketchybar/plugins/showy_quota.sh:$(SBAR_PLUGINS)/showy_quota.sh"; do \
 		src=$${pair%%:*}; target=$${pair##*:}; \
 		if [ -L "$$target" ]; then \
 			cur=$$(readlink "$$target"); \
@@ -111,16 +111,16 @@ test: ## Run the smoke-test suite against fixtures (no live codexbar).
 
 doctor: ## Check runtime prerequisites without touching the system.
 	@bash -c '(( BASH_VERSINFO[0] >= 4 ))' || { \
-		printf 'showy-bar: bash 4+ required. macOS /bin/bash is 3.2; install Homebrew bash.\n' >&2; exit 1; }
+		printf 'showy-quota: bash 4+ required. macOS /bin/bash is 3.2; install Homebrew bash.\n' >&2; exit 1; }
 	@command -v jq >/dev/null || { \
-		printf 'showy-bar: jq is required (brew install jq / apt-get install jq).\n' >&2; exit 1; }
-	@serve_url="$${SHOWY_BAR_CODEXBAR_SERVE_URL:-http://127.0.0.1:8080}"; \
+		printf 'showy-quota: jq is required (brew install jq / apt-get install jq).\n' >&2; exit 1; }
+	@serve_url="$${SHOWY_QUOTA_CODEXBAR_SERVE_URL:-http://127.0.0.1:8080}"; \
 	if command -v codexbar >/dev/null; then \
 		source_desc="codexbar $$(command -v codexbar)"; \
-	elif command -v curl >/dev/null && curl --fail --silent --max-time "$${SHOWY_BAR_CODEXBAR_SERVE_TIMEOUT_SECONDS:-0.5}" "$${serve_url%/}/usage" >/dev/null; then \
+	elif command -v curl >/dev/null && curl --fail --silent --max-time "$${SHOWY_QUOTA_CODEXBAR_SERVE_TIMEOUT_SECONDS:-0.5}" "$${serve_url%/}/usage" >/dev/null; then \
 		source_desc="codexbar serve $${serve_url%/}/usage"; \
 	else \
-		printf 'showy-bar: CodexBar data source required.\n' >&2; \
+		printf 'showy-quota: CodexBar data source required.\n' >&2; \
 		printf '  preferred: codexbar serve at %s/usage (requires curl)\n' "$${serve_url%/}" >&2; \
 		printf '  fallback:  codexbar CLI on PATH\n' >&2; exit 1; \
 	fi; \
@@ -130,23 +130,23 @@ doctor: ## Check runtime prerequisites without touching the system.
 		"$${source_desc}"
 
 diagnose: ## Print runtime state useful for bug reports.
-	@$(REPO)/bin/showy-bar --diagnose
+	@$(REPO)/bin/showy-quota --diagnose
 
 lint: ## Run shellcheck if available.
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		shellcheck -x \
-			"$(REPO)/bin/showy-bar-fetch" \
-			"$(REPO)/bin/showy-bar-state" \
-			"$(REPO)/bin/showy-bar" \
-			"$(REPO)/bin/showy-bar-tmux-bar" \
-			"$(REPO)/bin/showy-bar-zellij-bar" \
-			"$(REPO)/bin/showy-bar-zellij-pipe" \
-			"$(REPO)/bin/showy-bar-zellij-kick" \
-			"$(REPO)/bin/showy-bar-zellij-new-tab" \
+			"$(REPO)/bin/showy-quota-fetch" \
+			"$(REPO)/bin/showy-quota-state" \
+			"$(REPO)/bin/showy-quota" \
+			"$(REPO)/bin/showy-quota-tmux-bar" \
+			"$(REPO)/bin/showy-quota-zellij-bar" \
+			"$(REPO)/bin/showy-quota-zellij-pipe" \
+			"$(REPO)/bin/showy-quota-zellij-kick" \
+			"$(REPO)/bin/showy-quota-zellij-new-tab" \
 			"$(REPO)/lib/common.sh" \
 			"$(REPO)/lib/strip.sh" \
-			"$(REPO)/sketchybar/items/showy_bar.sh" \
-			"$(REPO)/sketchybar/plugins/showy_bar.sh" \
+			"$(REPO)/sketchybar/items/showy_quota.sh" \
+			"$(REPO)/sketchybar/plugins/showy_quota.sh" \
 			"$(REPO)/test/render_test.sh"; \
 	else \
 		printf 'shellcheck not installed; skipping\n'; \
@@ -154,5 +154,5 @@ lint: ## Run shellcheck if available.
 
 
 clean: ## Remove the user-cache directory used by this repo.
-	@rm -rf "$${XDG_CACHE_HOME:-$$HOME/.cache}/showy-bar"
-	@printf 'cleared %s\n' "$${XDG_CACHE_HOME:-$$HOME/.cache}/showy-bar"
+	@rm -rf "$${XDG_CACHE_HOME:-$$HOME/.cache}/showy-quota"
+	@printf 'cleared %s\n' "$${XDG_CACHE_HOME:-$$HOME/.cache}/showy-quota"

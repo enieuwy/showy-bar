@@ -2,18 +2,18 @@
 
 ## Output shape
 
-`bin/showy-bar-tmux-bar` emits tmux-format markup with the same visible
+`bin/showy-quota-tmux-bar` emits tmux-format markup with the same visible
 provider chunks as the Zellij strip:
 
 ```text
 <SIGIL>▕<12-cell bar body>▏<countdown>
 ```
 
-Default `SHOWY_BAR_TERMINAL_BAR_MODE=auto` renders each provider according to
+Default `SHOWY_QUOTA_TERMINAL_BAR_MODE=auto` renders each provider according to
 its configured terminal body. Time-tier providers use `dual`: upper-half blocks
 (`▀`) where foreground is primary and background is secondary, with the
-secondary elapsed marker in `SHOWY_BAR_PALETTE_ELAPSED`. Providers listed in
-`SHOWY_BAR_MONO3_PROVIDERS` (`gemini,antigravity` by default) use `mono3`:
+secondary elapsed marker in `SHOWY_QUOTA_PALETTE_ELAPSED`. Providers listed in
+`SHOWY_QUOTA_MONO3_PROVIDERS` (`gemini,antigravity` by default) use `mono3`:
 primary, secondary, and tertiary are top/middle/bottom sextant rows with one
 provider-level foreground color and one fixed light `│` pacing separator. The
 separator is based on the primary row by default, so the bar body is one
@@ -21,23 +21,23 @@ terminal cell wider only when that selected row has a parseable reset/window.
 
 Colors are emitted as tmux `#[fg=#RRGGBB,bg=#RRGGBB]` markup; the markup is
 longer than the visible strip but does not consume status-line columns.
-`SHOWY_BAR_MONO3_PROVIDERS` opts providers into `mono3` in `auto` mode;
-`SHOWY_BAR_MONO3_PROVIDERS_EXCLUDE` wins and forces listed providers back to
-`dual`. `SHOWY_BAR_MONO3_COLOR_MODE=lowest` colors `mono3` by the lowest
+`SHOWY_QUOTA_MONO3_PROVIDERS` opts providers into `mono3` in `auto` mode;
+`SHOWY_QUOTA_MONO3_PROVIDERS_EXCLUDE` wins and forces listed providers back to
+`dual`. `SHOWY_QUOTA_MONO3_COLOR_MODE=lowest` colors `mono3` by the lowest
 remaining visible row using the primary palette; set it to `primary` to key off
-primary only. `SHOWY_BAR_MONO3_MARKER_SOURCE` selects the one mono3 pacing
+primary only. `SHOWY_QUOTA_MONO3_MARKER_SOURCE` selects the one mono3 pacing
 separator: `primary` (default), `secondary`, `tertiary`, `shared` (only when at
 least two rows share one parseable reset/window), or `none`. Stale snapshots
-hide mono3 pacing separators. `SHOWY_BAR_MONO3_MARKER_STYLE` toggles the separator
-between `replace` (fixed width, default) and `insert`. Set `SHOWY_BAR_TERMINAL_BAR_MODE=dual`, `sextant3`,
+hide mono3 pacing separators. `SHOWY_QUOTA_MONO3_MARKER_STYLE` toggles the separator
+between `replace` (fixed width, default) and `insert`. Set `SHOWY_QUOTA_TERMINAL_BAR_MODE=dual`, `sextant3`,
 or `mono3` to force one body mode for every provider. Forced `sextant3` uses
 the same top/middle/bottom geometry as `mono3`, but keeps the bottom-most filled
 row as the cell color and omits elapsed markers.
 
-When the cache is older than `2 × SHOWY_BAR_REFRESH_SECONDS`, tmux gets one
-trailing `SHOWY_BAR_STALE_GLYPH` (default `⚠`) after the last provider. The
+When the cache is older than `2 × SHOWY_QUOTA_REFRESH_SECONDS`, tmux gets one
+trailing `SHOWY_QUOTA_STALE_GLYPH` (default `⚠`) after the last provider. The
 cap glyphs, sigil background, separator, bar fill cells, and countdown
-foreground use `SHOWY_BAR_PALETTE_STALE`; sigil letters and the strip
+foreground use `SHOWY_QUOTA_PALETTE_STALE`; sigil letters and the strip
 background stay unchanged, and elapsed markers are hidden.
 
 ```text
@@ -48,30 +48,30 @@ stale: #[…]CL▕▀▀▀▀▀▀▀▀▀▀▀▀▏12m #[…]⚠   #
 ## Font requirements
 
 Each provider chunk is wrapped in Powerline-Extra end caps: U+E0B6
-(`SHOWY_BAR_CAP_LEFT`, default ``) and U+E0B4 (`SHOWY_BAR_CAP_RIGHT`, default
+(`SHOWY_QUOTA_CAP_LEFT`, default ``) and U+E0B4 (`SHOWY_QUOTA_CAP_RIGHT`, default
 ``). Any Nerd Font ships these; with a non-Nerd font configure a fallback for
-the U+E0A0–U+E0D4 range, or set either `SHOWY_BAR_CAP_*` env var to an empty
+the U+E0A0–U+E0D4 range, or set either `SHOWY_QUOTA_CAP_*` env var to an empty
 string for a flat edge.
 
 The `dual` body uses common Unicode Block Elements (`▀`, `▕`, `▏`). `auto`
-renders providers in `SHOWY_BAR_MONO3_PROVIDERS` as `mono3`, and forced
+renders providers in `SHOWY_QUOTA_MONO3_PROVIDERS` as `mono3`, and forced
 `sextant3`/`mono3` bodies require Unicode Symbols for Legacy Computing
 U+1FB00–U+1FB3B. If your tmux font cannot render those sextants, use a font with
-that range, remove the provider from `SHOWY_BAR_MONO3_PROVIDERS`, or force
-`SHOWY_BAR_TERMINAL_BAR_MODE=dual`.
+that range, remove the provider from `SHOWY_QUOTA_MONO3_PROVIDERS`, or force
+`SHOWY_QUOTA_TERMINAL_BAR_MODE=dual`.
 
 
 ## status-right
 
-Append to your existing `status-right` so `showy-bar` cohabits with
+Append to your existing `status-right` so `showy-quota` cohabits with
 whatever else you display:
 
 ```tmux
 set -g status-right-length 300
-if -F '#{m:*showy-bar-tmux-bar*,#{status-right}}' '' 'set -ag status-right " #(/Users/REPLACE_ME/.local/bin/showy-bar-tmux-bar)"'
+if -F '#{m:*showy-quota-tmux-bar*,#{status-right}}' '' 'set -ag status-right " #(/Users/REPLACE_ME/.local/bin/showy-quota-tmux-bar)"'
 ```
 
-Use the absolute path to `showy-bar-tmux-bar`; tmux's startup PATH often
+Use the absolute path to `showy-quota-tmux-bar`; tmux's startup PATH often
 does not include `~/.local/bin`. The guard prevents duplicate segments
 when `.tmux.conf` is sourced repeatedly.
 
@@ -90,8 +90,8 @@ set -g window-status-current-format ''
 tmux invokes the script on its own schedule (default 15 s). The script
 itself reads from the shared cache, so it is fast (≤ 50 ms typical).
 With `codexbar serve` running, the shared cache refreshes from the local HTTP
-endpoint every `SHOWY_BAR_CODEXBAR_SERVE_REFRESH_SECONDS` by default. Tighten
-`SHOWY_BAR_REFRESH_SECONDS` only if you intentionally want the slower CLI
+endpoint every `SHOWY_QUOTA_CODEXBAR_SERVE_REFRESH_SECONDS` by default. Tighten
+`SHOWY_QUOTA_REFRESH_SECONDS` only if you intentionally want the slower CLI
 fallback to run more often too.
 
 ## PATH gotchas
@@ -104,6 +104,6 @@ macOS, or via `tmux set-environment -g PATH ...`).
 
 ## Detail popup
 
-`bind-key '/' display-popup -E -h 36 -w 92 -T "CodexBar usage" 'config="${XDG_CONFIG_HOME:-$HOME/.config}/showy-bar/config.env"; [ -r "$config" ] && . "$config"; while :; do clear; "${SHOWY_BAR_CODEXBAR_BIN:-codexbar}" usage; sleep 30; done'`
+`bind-key '/' display-popup -E -h 36 -w 92 -T "CodexBar usage" 'config="${XDG_CONFIG_HOME:-$HOME/.config}/showy-quota/config.env"; [ -r "$config" ] && . "$config"; while :; do clear; "${SHOWY_QUOTA_CODEXBAR_BIN:-codexbar}" usage; sleep 30; done'`
 
 Hit `<prefix>/` to open. CodexBar's text mode is the detail view.

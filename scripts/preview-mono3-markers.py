@@ -7,7 +7,7 @@ fill/marker scenarios.
 
 Strategies:
 
-  1. current (insert)      Existing showy-bar behavior: insert a `│`
+  1. current (insert)      Existing showy-quota behavior: insert a `│`
                            character at a boundary in [0..WIDTH]. Body
                            width grows to WIDTH+1 when the marker is
                            interior.

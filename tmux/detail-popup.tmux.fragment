@@ -1,8 +1,8 @@
-# showy-bar — tmux popup keybinding for an on-demand detail panel.
+# showy-quota — tmux popup keybinding for an on-demand detail panel.
 #
 # Add to ~/.tmux.conf. Adjust the prefix-relative key to taste. Uses a
 # tiny shell loop to avoid depending on `watch(1)`, which is not on
 # default macOS.
 
 bind-key '/' display-popup -E -h 36 -w 92 -T "CodexBar usage" \
-    'config="${XDG_CONFIG_HOME:-$HOME/.config}/showy-bar/config.env"; [ -r "$config" ] && . "$config"; while :; do clear; "${SHOWY_BAR_CODEXBAR_BIN:-codexbar}" usage; sleep 30; done'
+    'config="${XDG_CONFIG_HOME:-$HOME/.config}/showy-quota/config.env"; [ -r "$config" ] && . "$config"; while :; do clear; "${SHOWY_QUOTA_CODEXBAR_BIN:-codexbar}" usage; sleep 30; done'

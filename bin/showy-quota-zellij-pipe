@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# showy-bar — one-shot zjstatus pipe update.
+# showy-quota — long-running zjstatus pipe loop.
 #
-# Useful after creating a Zellij tab: new zjstatus plugin instances start with
-# empty pipe state and otherwise wait for the long-running feeder's next tick.
+# Pipes the rendered ANSI strip into zjstatus on a fixed cadence. We use
+# the pipe widget instead of zjstatus's command widget because the command
+# widget crashes under WASMI with std::sync::Mutex initialization errors
+# (single-threaded WASM).
 
 set -euo pipefail
 
@@ -19,16 +21,18 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${SCRIPT_PATH}")" && pwd -P)"
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../lib/common.sh"
 
-BAR="${SCRIPT_DIR}/showy-bar-zellij-bar"
-[[ -x "${BAR}" ]] || showy_bar_die "missing renderer: ${BAR}"
-export SHOWY_BAR_FORCE_COLOR=1
+BAR="${SCRIPT_DIR}/showy-quota-zellij-bar"
+[[ -x "${BAR}" ]] || showy_quota_die "missing renderer: ${BAR}"
+export SHOWY_QUOTA_FORCE_COLOR=1
 
-showy_bar_have "${SHOWY_BAR_ZELLIJ_BIN}" || showy_bar_die "zellij is required for pipe mode: ${SHOWY_BAR_ZELLIJ_BIN}"
+showy_quota_have "${SHOWY_QUOTA_ZELLIJ_BIN}" || showy_quota_die "zellij is required for pipe mode: ${SHOWY_QUOTA_ZELLIJ_BIN}"
 
-widget="${SHOWY_BAR_ZELLIJ_WIDGET}"
-pipe_name="${SHOWY_BAR_ZELLIJ_PIPE_NAME}"
-plugin="${SHOWY_BAR_ZELLIJ_PLUGIN}"
-pipe_timeout_tenths="${SHOWY_BAR_ZELLIJ_PIPE_TIMEOUT_TENTHS}"
+interval="${SHOWY_QUOTA_ZELLIJ_PIPE_INTERVAL}"
+[[ "${interval}" =~ ^[0-9]+([.][0-9]+)?$ ]] || interval=10
+widget="${SHOWY_QUOTA_ZELLIJ_WIDGET}"
+pipe_name="${SHOWY_QUOTA_ZELLIJ_PIPE_NAME}"
+plugin="${SHOWY_QUOTA_ZELLIJ_PLUGIN}"
+pipe_timeout_tenths="${SHOWY_QUOTA_ZELLIJ_PIPE_TIMEOUT_TENTHS}"
 [[ "${pipe_timeout_tenths}" =~ ^[0-9]+$ ]] || pipe_timeout_tenths=20
 zellij_args=()
 if [[ -n "${ZELLIJ_SESSION_NAME:-}" ]]; then
@@ -58,7 +62,7 @@ send_pipe() {
     fi
     args+=(-- "${payload}")
 
-    "${SHOWY_BAR_ZELLIJ_BIN}" "${zellij_args[@]}" "${args[@]}" </dev/null >/dev/null 2>&1 &
+    "${SHOWY_QUOTA_ZELLIJ_BIN}" "${zellij_args[@]}" "${args[@]}" </dev/null >/dev/null 2>&1 &
     child=$!
     while kill -0 "${child}" 2>/dev/null; do
         if (( waited >= pipe_timeout_tenths )); then
@@ -71,6 +75,14 @@ send_pipe() {
     wait "${child}" >/dev/null 2>&1
 }
 
-if output=$("${BAR}" 2>/dev/null) && [[ -n "${output}" ]]; then
-    send_pipe "zjstatus::pipe::${widget}::${output}"
-fi
+# zjstatus consumes the protocol from the payload itself:
+#   zjstatus::pipe::<widget>::<output>
+# Broadcast by default because zjstatus pipe widgets are configured per plugin
+# instance. Bound each helper so another plugin's CLI-pipe backpressure cannot
+# pin this feeder after an early or unlucky update.
+while :; do
+    if output=$("${BAR}" 2>/dev/null) && [[ -n "${output}" ]]; then
+        send_pipe "zjstatus::pipe::${widget}::${output}" || true
+    fi
+    sleep "${interval}"
+done

@@ -25,10 +25,10 @@ already redacts secrets (it only echoes path locations and tool versions).
 ## Diagnose output
 
 <details>
-<summary><code>showy-bar --diagnose</code></summary>
+<summary><code>showy-quota --diagnose</code></summary>
 
 ```
-$ bin/showy-bar --diagnose
+$ bin/showy-quota --diagnose
 <paste the full output here>
 ```
 
@@ -47,7 +47,7 @@ upstream in CodexBar (provider not enabled / not signed in).
 
 - OS:
 - `bash --version | head -n1`:
-- showy-bar commit:
+- showy-quota commit:
 - CodexBar version (`codexbar --version`):
 
 ## Anything else?

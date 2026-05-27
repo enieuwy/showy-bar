@@ -6,9 +6,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd -P)"
-OUT_DIR="${SHOWY_BAR_SKETCH_PREVIEW_OUT_DIR:-${REPO_ROOT}/docs/images/themes}"
-BASH_BIN="${SHOWY_BAR_SKETCH_PREVIEW_BASH_BIN:-/opt/homebrew/bin/bash}"
-CODEXBAR_RESOURCES="${SHOWY_BAR_CODEXBAR_RESOURCES:-/Applications/CodexBar.app/Contents/Resources}"
+OUT_DIR="${SHOWY_QUOTA_SKETCH_PREVIEW_OUT_DIR:-${REPO_ROOT}/docs/images/themes}"
+BASH_BIN="${SHOWY_QUOTA_SKETCH_PREVIEW_BASH_BIN:-/opt/homebrew/bin/bash}"
+CODEXBAR_RESOURCES="${SHOWY_QUOTA_CODEXBAR_RESOURCES:-/Applications/CodexBar.app/Contents/Resources}"
 NOW_EPOCH="4070908800"
 BAR_W=80
 ROW_H=6
@@ -18,13 +18,13 @@ if [[ ! -x "${BASH_BIN}" ]]; then
     BASH_BIN="$(command -v bash || true)"
 fi
 if [[ -z "${BASH_BIN}" || ! -x "${BASH_BIN}" ]]; then
-    printf 'showy-bar: bash is required for SketchyBar previews\n' >&2
+    printf 'showy-quota: bash is required for SketchyBar previews\n' >&2
     exit 1
 fi
 
 for tool in base64 jq magick; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
-        printf 'showy-bar: %s is required for SketchyBar previews\n' "${tool}" >&2
+        printf 'showy-quota: %s is required for SketchyBar previews\n' "${tool}" >&2
         exit 1
     fi
 done
@@ -53,7 +53,7 @@ write_fetch_stub() {
     local path="$1"
     cat > "${path}" <<'EOF'
 #!/bin/bash
-printf '%s\n' "${SHOWY_BAR_PREVIEW_FIXTURE}"
+printf '%s\n' "${SHOWY_QUOTA_PREVIEW_FIXTURE}"
 EOF
     chmod +x "${path}"
 }
@@ -69,16 +69,16 @@ EOF
 
 palette_value() {
     local theme="$1" key="$2"
-    SHOWY_BAR_THEME="${theme}" \
-        SHOWY_BAR_NO_CONFIG=1 \
-        "${BASH_BIN}" -c '. "$1"; showy_bar_palette "$2"' _ "${REPO_ROOT}/lib/common.sh" "${key}"
+    SHOWY_QUOTA_THEME="${theme}" \
+        SHOWY_QUOTA_NO_CONFIG=1 \
+        "${BASH_BIN}" -c '. "$1"; showy_quota_palette "$2"' _ "${REPO_ROOT}/lib/common.sh" "${key}"
 }
 
 role_color() {
     local theme="$1" role="$2" remaining="$3"
-    SHOWY_BAR_THEME="${theme}" \
-        SHOWY_BAR_NO_CONFIG=1 \
-        "${BASH_BIN}" -c '. "$1"; showy_bar_role_color "$2" "$3"' _ "${REPO_ROOT}/lib/common.sh" "${role}" "${remaining}"
+    SHOWY_QUOTA_THEME="${theme}" \
+        SHOWY_QUOTA_NO_CONFIG=1 \
+        "${BASH_BIN}" -c '. "$1"; showy_quota_role_color "$2" "$3"' _ "${REPO_ROOT}/lib/common.sh" "${role}" "${remaining}"
 }
 
 png_data_uri() {
@@ -99,7 +99,7 @@ elapsed_marker_x() {
     [[ -n "${reset_at}" && "${window_minutes}" =~ ^[0-9]+$ ]] || return 1
     (( window_minutes > 0 )) || return 1
 
-    reset_epoch=$(SHOWY_BAR_NO_CONFIG=1 "${BASH_BIN}" -c '. "$1"; showy_bar_reset_epoch "$2"' _ "${REPO_ROOT}/lib/common.sh" "${reset_at}") || return 1
+    reset_epoch=$(SHOWY_QUOTA_NO_CONFIG=1 "${BASH_BIN}" -c '. "$1"; showy_quota_reset_epoch "$2"' _ "${REPO_ROOT}/lib/common.sh" "${reset_at}") || return 1
     duration=$((window_minutes * 60))
     start_epoch=$((reset_epoch - duration))
     elapsed=$((NOW_EPOCH - start_epoch))
@@ -182,15 +182,15 @@ render_theme() {
     write_fetch_stub "${fetch_bin}"
     write_sketchybar_stub "${stub_dir}/sketchybar"
 
-    SHOWY_BAR_THEME="${theme}" \
-        SHOWY_BAR_NO_CONFIG=1 \
-        SHOWY_BAR_NOW_EPOCH="${NOW_EPOCH}" \
-        SHOWY_BAR_FETCH_BIN="${fetch_bin}" \
-        SHOWY_BAR_PREVIEW_FIXTURE="$(fixture_json)" \
-        SHOWY_BAR_SKETCHYBAR_IMAGE_CACHE="${cache_dir}" \
-        SHOWY_BAR_CODEXBAR_RESOURCES="${CODEXBAR_RESOURCES}" \
+    SHOWY_QUOTA_THEME="${theme}" \
+        SHOWY_QUOTA_NO_CONFIG=1 \
+        SHOWY_QUOTA_NOW_EPOCH="${NOW_EPOCH}" \
+        SHOWY_QUOTA_FETCH_BIN="${fetch_bin}" \
+        SHOWY_QUOTA_PREVIEW_FIXTURE="$(fixture_json)" \
+        SHOWY_QUOTA_SKETCHYBAR_IMAGE_CACHE="${cache_dir}" \
+        SHOWY_QUOTA_CODEXBAR_RESOURCES="${CODEXBAR_RESOURCES}" \
         PATH="${stub_dir}:${PATH}" \
-        "${BASH_BIN}" "${REPO_ROOT}/sketchybar/plugins/showy_bar.sh"
+        "${BASH_BIN}" "${REPO_ROOT}/sketchybar/plugins/showy_quota.sh"
 
     strip_png_metadata "${cache_dir}/icon-v2-claude.png"
     strip_png_metadata "${cache_dir}/icon-v2-codex.png"
@@ -212,7 +212,7 @@ main() {
     while IFS= read -r theme; do
         [[ -n "${theme}" ]] || continue
         render_theme "${theme}"
-    done < <("${REPO_ROOT}/bin/showy-bar" --list)
+    done < <("${REPO_ROOT}/bin/showy-quota" --list)
 }
 
 main "$@"

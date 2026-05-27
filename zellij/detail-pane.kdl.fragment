@@ -1,4 +1,4 @@
-// showy-bar — Zellij keybind for an on-demand detail pane.
+// showy-quota — Zellij keybind for an on-demand detail pane.
 //
 // Add inside an existing keybinds block in your zellij config. Adjust
 // the mode/key to taste. The pane runs a tiny shell loop (no `watch`
@@ -6,7 +6,7 @@
 
 shared {
     bind "Alt /" {
-        Run "sh" "-c" "config=\"${XDG_CONFIG_HOME:-$HOME/.config}/showy-bar/config.env\"; [ -r \"$config\" ] && . \"$config\"; while :; do clear; \"${SHOWY_BAR_CODEXBAR_BIN:-codexbar}\" usage; sleep 30; done" {
+        Run "sh" "-c" "config=\"${XDG_CONFIG_HOME:-$HOME/.config}/showy-quota/config.env\"; [ -r \"$config\" ] && . \"$config\"; while :; do clear; \"${SHOWY_QUOTA_CODEXBAR_BIN:-codexbar}\" usage; sleep 30; done" {
             close_on_exit true
             floating true
             height "36"

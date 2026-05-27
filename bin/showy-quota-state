@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# showy-bar — stable state surface for layout managers and adapters.
+# showy-quota — stable state surface for layout managers and adapters.
 #
-# Reads the shared CodexBar cache through showy-bar-fetch, applies the same
+# Reads the shared CodexBar cache through showy-quota-fetch, applies the same
 # renderable-provider filtering as every bar renderer, and emits compact JSON
 # that external coordinators can consume without knowing CodexBar's schema.
 #
@@ -35,20 +35,20 @@ while (($#)); do
         --providers) mode="providers" ;;
         -h|--help)
             printf '%s\n' \
-                'Usage: showy-bar-state [--json|--count|--providers]' \
+                'Usage: showy-quota-state [--json|--count|--providers]' \
                 '' \
                 'Emits filtered CodexBar provider state for external layout managers.'
             exit 0
             ;;
-        *) showy_bar_die "unknown argument: $1" ;;
+        *) showy_quota_die "unknown argument: $1" ;;
     esac
     shift
 done
 
-showy_bar_have jq || showy_bar_die "jq is required"
+showy_quota_have jq || showy_quota_die "jq is required"
 
-FETCH="${SHOWY_BAR_FETCH_BIN:-${SCRIPT_DIR}/showy-bar-fetch}"
-threshold="${SHOWY_BAR_SKETCHYBAR_COMPACT_PROVIDER_COUNT:-5}"
+FETCH="${SHOWY_QUOTA_FETCH_BIN:-${SCRIPT_DIR}/showy-quota-fetch}"
+threshold="${SHOWY_QUOTA_SKETCHYBAR_COMPACT_PROVIDER_COUNT:-5}"
 if [[ ! "${threshold}" =~ ^[0-9]+$ ]]; then
     threshold=5
 fi
@@ -60,16 +60,16 @@ if data=$("${FETCH}" 2>/dev/null) && [[ -n "${data}" ]]; then
 fi
 
 if [[ "${available}" == true ]]; then
-    providers_json=$(printf '%s' "${data}" | showy_bar_filter_renderable | jq -c '[ .[].provider ]')
+    providers_json=$(printf '%s' "${data}" | showy_quota_filter_renderable | jq -c '[ .[].provider ]')
 else
     providers_json='[]'
 fi
 
 cache_age="null"
-if [[ -f "${SHOWY_BAR_USAGE_FILE}" ]]; then
-    cache_age=$(showy_bar_age_seconds "${SHOWY_BAR_USAGE_FILE}")
+if [[ -f "${SHOWY_QUOTA_USAGE_FILE}" ]]; then
+    cache_age=$(showy_quota_age_seconds "${SHOWY_QUOTA_USAGE_FILE}")
 fi
-stale_after=$(showy_bar_stale_after_seconds)
+stale_after=$(showy_quota_stale_after_seconds)
 if [[ "${cache_age}" != "null" ]] && (( cache_age > stale_after )); then
     stale_flag=true
 else
@@ -100,8 +100,8 @@ case "${mode}" in
                 providers: $providers,
                 providerCount: ($providers | length),
                 sketchybar: {
-                    itemPrefix: "showy_bar",
-                    bracket: "showy_bar_bracket",
+                    itemPrefix: "showy_quota",
+                    bracket: "showy_quota_bracket",
                     compactProviderThreshold: $compact_threshold_num,
                     compactRecommended: (($providers | length) >= $compact_threshold_num)
                 }

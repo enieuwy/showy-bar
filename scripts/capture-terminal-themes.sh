@@ -11,43 +11,43 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd -P)"
 
-GHOSTTY_APP="${SHOWY_BAR_CAPTURE_GHOSTTY_APP:-/Applications/Ghostty.app}"
-GHOSTTY_BIN="${SHOWY_BAR_CAPTURE_GHOSTTY_BIN:-${GHOSTTY_APP}/Contents/MacOS/ghostty}"
-BASH_BIN="${SHOWY_BAR_CAPTURE_BASH_BIN:-/opt/homebrew/bin/bash}"
-OUT_DIR="${SHOWY_BAR_CAPTURE_OUT_DIR:-${REPO_ROOT}/docs/images/themes}"
-OUTPUT_W="${SHOWY_BAR_CAPTURE_OUTPUT_W:-968}"
-OUTPUT_H="${SHOWY_BAR_CAPTURE_OUTPUT_H:-48}"
-OUTPUT_X="${SHOWY_BAR_CAPTURE_OUTPUT_X:-0}"
-OUTPUT_Y="${SHOWY_BAR_CAPTURE_OUTPUT_Y:-0}"
-WARMUP_SECONDS="${SHOWY_BAR_CAPTURE_WARMUP_SECONDS:-1.8}"
-HOLD_SECONDS="${SHOWY_BAR_CAPTURE_HOLD_SECONDS:-5}"
-FONT_SIZE="${SHOWY_BAR_CAPTURE_FONT_SIZE:-18}"
-COLUMNS="${SHOWY_BAR_CAPTURE_COLUMNS:-88}"
-LINES="${SHOWY_BAR_CAPTURE_LINES:-2}"
-WINDOW_X="${SHOWY_BAR_CAPTURE_WINDOW_X:-137}"
-WINDOW_Y="${SHOWY_BAR_CAPTURE_WINDOW_Y:-113}"
+GHOSTTY_APP="${SHOWY_QUOTA_CAPTURE_GHOSTTY_APP:-/Applications/Ghostty.app}"
+GHOSTTY_BIN="${SHOWY_QUOTA_CAPTURE_GHOSTTY_BIN:-${GHOSTTY_APP}/Contents/MacOS/ghostty}"
+BASH_BIN="${SHOWY_QUOTA_CAPTURE_BASH_BIN:-/opt/homebrew/bin/bash}"
+OUT_DIR="${SHOWY_QUOTA_CAPTURE_OUT_DIR:-${REPO_ROOT}/docs/images/themes}"
+OUTPUT_W="${SHOWY_QUOTA_CAPTURE_OUTPUT_W:-968}"
+OUTPUT_H="${SHOWY_QUOTA_CAPTURE_OUTPUT_H:-48}"
+OUTPUT_X="${SHOWY_QUOTA_CAPTURE_OUTPUT_X:-0}"
+OUTPUT_Y="${SHOWY_QUOTA_CAPTURE_OUTPUT_Y:-0}"
+WARMUP_SECONDS="${SHOWY_QUOTA_CAPTURE_WARMUP_SECONDS:-1.8}"
+HOLD_SECONDS="${SHOWY_QUOTA_CAPTURE_HOLD_SECONDS:-5}"
+FONT_SIZE="${SHOWY_QUOTA_CAPTURE_FONT_SIZE:-18}"
+COLUMNS="${SHOWY_QUOTA_CAPTURE_COLUMNS:-88}"
+LINES="${SHOWY_QUOTA_CAPTURE_LINES:-2}"
+WINDOW_X="${SHOWY_QUOTA_CAPTURE_WINDOW_X:-137}"
+WINDOW_Y="${SHOWY_QUOTA_CAPTURE_WINDOW_Y:-113}"
 
 if [[ ! -x "${GHOSTTY_BIN}" ]]; then
-    printf 'showy-bar: Ghostty binary not found: %s\n' "${GHOSTTY_BIN}" >&2
-    printf 'showy-bar: set SHOWY_BAR_CAPTURE_GHOSTTY_APP or SHOWY_BAR_CAPTURE_GHOSTTY_BIN to override it\n' >&2
+    printf 'showy-quota: Ghostty binary not found: %s\n' "${GHOSTTY_BIN}" >&2
+    printf 'showy-quota: set SHOWY_QUOTA_CAPTURE_GHOSTTY_APP or SHOWY_QUOTA_CAPTURE_GHOSTTY_BIN to override it\n' >&2
     exit 1
 fi
 if [[ ! -d "${GHOSTTY_APP}" ]]; then
-    printf 'showy-bar: Ghostty app not found: %s\n' "${GHOSTTY_APP}" >&2
-    printf 'showy-bar: set SHOWY_BAR_CAPTURE_GHOSTTY_APP to the app bundle used by open(1)\n' >&2
+    printf 'showy-quota: Ghostty app not found: %s\n' "${GHOSTTY_APP}" >&2
+    printf 'showy-quota: set SHOWY_QUOTA_CAPTURE_GHOSTTY_APP to the app bundle used by open(1)\n' >&2
     exit 1
 fi
 if [[ ! -x "${BASH_BIN}" ]]; then
     BASH_BIN="$(command -v bash || true)"
 fi
 if [[ -z "${BASH_BIN}" || ! -x "${BASH_BIN}" ]]; then
-    printf 'showy-bar: bash is required for terminal captures\n' >&2
+    printf 'showy-quota: bash is required for terminal captures\n' >&2
     exit 1
 fi
 
 for tool in awk magick open screencapture swift; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
-        printf 'showy-bar: %s is required for terminal captures\n' "${tool}" >&2
+        printf 'showy-quota: %s is required for terminal captures\n' "${tool}" >&2
         exit 1
     fi
 done
@@ -115,9 +115,9 @@ ghostty_string() {
 
 palette_value() {
     local theme="$1" key="$2"
-    SHOWY_BAR_THEME="${theme}" \
-        SHOWY_BAR_NO_CONFIG=1 \
-        "${BASH_BIN}" -c '. "$1"; showy_bar_palette "$2"' _ "${REPO_ROOT}/lib/common.sh" "${key}"
+    SHOWY_QUOTA_THEME="${theme}" \
+        SHOWY_QUOTA_NO_CONFIG=1 \
+        "${BASH_BIN}" -c '. "$1"; showy_quota_palette "$2"' _ "${REPO_ROOT}/lib/common.sh" "${key}"
 }
 
 write_command_script() {
@@ -128,11 +128,11 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:\${PATH:-}"
 cd "${REPO_ROOT}"
 printf '\\033[?25l\\033[2J\\033[H'
-SHOWY_BAR_THEME="${theme}" \\
-    SHOWY_BAR_NO_CONFIG=1 \\
-    SHOWY_BAR_FORCE_COLOR=1 \\
-    SHOWY_BAR_NOW_EPOCH=4070908800 \\
-    "${REPO_ROOT}/bin/showy-bar" --preview "${theme}"
+SHOWY_QUOTA_THEME="${theme}" \\
+    SHOWY_QUOTA_NO_CONFIG=1 \\
+    SHOWY_QUOTA_FORCE_COLOR=1 \\
+    SHOWY_QUOTA_NOW_EPOCH=4070908800 \\
+    "${REPO_ROOT}/bin/showy-quota" --preview "${theme}"
 sleep "${HOLD_SECONDS}"
 EOF
     chmod +x "${command_file}"
@@ -146,14 +146,14 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:\${PATH:-}"
 cd "${REPO_ROOT}"
 printf '\\033[?25l\\033[2J\\033[H'
-SHOWY_BAR_THEME=default \\
-    SHOWY_BAR_NO_CONFIG=1 \\
-    SHOWY_BAR_FORCE_COLOR=1 \\
-    SHOWY_BAR_NOW_EPOCH=4070908800 \\
-    SHOWY_BAR_CAP_LEFT=\$'\\ue0b6' \\
-    SHOWY_BAR_CAP_RIGHT=\$'\\ue0b4' \\
-    SHOWY_BAR_TERMINAL_BAR_MODE=mono3 \\
-    "${REPO_ROOT}/bin/showy-bar-zellij-bar" --json - <<'JSON'
+SHOWY_QUOTA_THEME=default \\
+    SHOWY_QUOTA_NO_CONFIG=1 \\
+    SHOWY_QUOTA_FORCE_COLOR=1 \\
+    SHOWY_QUOTA_NOW_EPOCH=4070908800 \\
+    SHOWY_QUOTA_CAP_LEFT=\$'\\ue0b6' \\
+    SHOWY_QUOTA_CAP_RIGHT=\$'\\ue0b4' \\
+    SHOWY_QUOTA_TERMINAL_BAR_MODE=mono3 \\
+    "${REPO_ROOT}/bin/showy-quota-zellij-bar" --json - <<'JSON'
 [
   {"provider":"gemini","usage":{
     "primary":  {"usedPercent":92,"resetsAt":"2099-01-01T02:30:00Z","windowMinutes":300},
@@ -276,7 +276,7 @@ capture_theme() {
     sleep "${WARMUP_SECONDS}"
 
     if ! bounds="$(window_bounds 900 80)"; then
-        printf 'showy-bar: Ghostty capture window did not appear for %s\n' "${theme}" >&2
+        printf 'showy-quota: Ghostty capture window did not appear for %s\n' "${theme}" >&2
         return 1
     fi
 
@@ -299,7 +299,7 @@ capture_mono3() {
     local screen_file="${TMP_DIR}/mono3-screen.png"
     local raw_file="${TMP_DIR}/mono3-raw.png"
     local out_file="${REPO_ROOT}/docs/images/mono3-terminal.png"
-    local mono3_w="${SHOWY_BAR_CAPTURE_MONO3_W:-1200}"
+    local mono3_w="${SHOWY_QUOTA_CAPTURE_MONO3_W:-1200}"
     local bg fg bounds scale geometry
 
     bg="$(palette_value default bg)"
@@ -314,7 +314,7 @@ capture_mono3() {
     sleep "${WARMUP_SECONDS}"
 
     if ! bounds="$(window_bounds 900 80)"; then
-        printf 'showy-bar: Ghostty capture window did not appear for mono3\n' >&2
+        printf 'showy-quota: Ghostty capture window did not appear for mono3\n' >&2
         return 1
     fi
 
@@ -349,7 +349,7 @@ main() {
     while IFS= read -r theme; do
         [[ -n "${theme}" ]] || continue
         capture_theme "${theme}"
-    done < <("${REPO_ROOT}/bin/showy-bar" --list)
+    done < <("${REPO_ROOT}/bin/showy-quota" --list)
 }
 
 main "$@"

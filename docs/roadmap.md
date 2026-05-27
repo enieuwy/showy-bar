@@ -2,7 +2,7 @@
 
 ## A possible community-driven Zellij plugin
 
-showy-bar already works today: install the scripts, add the Zellij layout
+showy-quota already works today: install the scripts, add the Zellij layout
 fragment, start one feeder process per Zellij session, and the bar shows
 CodexBar quota state without asking Zellij for elevated plugin permissions.
 That path should remain supported.
@@ -23,11 +23,11 @@ The only plugin paths worth the implementation lift are:
 1. **Path 5: Headless companion plugin (recommended first step).** A
    `load_plugins` background plugin that subscribes to `TabUpdate`, `Visible`,
    and `Timer`, and pushes the cached strip into the existing zjstatus
-   `pipe_showy_bar` widget via `pipe_message_to_plugin`. Same data plane as
+   `pipe_showy_quota` widget via `pipe_message_to_plugin`. Same data plane as
    today; eliminates the external feeder and first-paint friction without
    owning the status row. Validated by [b0o/zjstatus-hints](https://github.com/b0o/zjstatus-hints),
    which has shipped the same architecture for the keybind-hints use case.
-2. **Path 3: Rust-native Zellij plugin using `showy-bar-fetch` as the cache/data
+2. **Path 3: Rust-native Zellij plugin using `showy-quota-fetch` as the cache/data
    helper.** The plugin owns Zellij lifecycle, parsing, and rendering, while the
    existing shell helper continues to own CodexBar invocation, cache locking,
    validation, and last-known-good semantics. Picks up users who reject the
@@ -44,14 +44,14 @@ the user story enough to justify another supported integration mode.
 
 The current Zellij integration is intentionally boring and reliable:
 
-- `bin/showy-bar-fetch` is the data-plane owner. It invokes `codexbar`, validates
+- `bin/showy-quota-fetch` is the data-plane owner. It invokes `codexbar`, validates
   provider JSON, writes the cache atomically, and returns stale-but-valid data
   when a refresh fails.
-- `bin/showy-bar-zellij-bar` renders the compact ANSI strip from cached data.
-- `bin/showy-bar-zellij-pipe` periodically sends that strip to a zjstatus pipe
+- `bin/showy-quota-zellij-bar` renders the compact ANSI strip from cached data.
+- `bin/showy-quota-zellij-pipe` periodically sends that strip to a zjstatus pipe
   widget.
-- `bin/showy-bar-zellij-kick` sends one immediate repaint.
-- `bin/showy-bar-zellij-new-tab` wraps `zellij action new-tab` plus the kick.
+- `bin/showy-quota-zellij-kick` sends one immediate repaint.
+- `bin/showy-quota-zellij-new-tab` wraps `zellij action new-tab` plus the kick.
 - `zellij/layout-pane.kdl.fragment` declares the visible zjstatus pipe widget.
 
 The recent cleanup removed metadata polling from the feeder. That leaves a
@@ -88,12 +88,12 @@ before implementation, but they are the design assumptions:
 - `pipe_message_to_plugin` lets one plugin push messages into another's `Pipe`
   event handler. It is gated by `PermissionType::MessageAndLaunchOtherPlugins`
   and is the mechanism a headless companion plugin would use to push the strip
-  into the existing zjstatus `pipe_showy_bar` widget.
+  into the existing zjstatus `pipe_showy_quota` widget.
 - Plugins loaded via `load_plugins` that call `request_permission` show their
   permission prompt in a floating pane that is hidden by default. The pane
   title is prefixed `(.) - <plugin-name>` while the prompt is pending. Users
   must reveal the floating panes once or pre-grant via `permissions.kdl`. This
-  is the failure mode of any future native showy-bar companion plugin and must
+  is the failure mode of any future native showy-quota companion plugin and must
   be documented in install instructions, not assumed away.
 
 ## Product and community framing
@@ -115,8 +115,8 @@ internal architecture:
 A good public-facing name can keep repository continuity while explaining the
 source:
 
-- Repository: `showy-bar`
-- Artifact: `showy-bar-zellij.wasm`
+- Repository: `showy-quota`
+- Artifact: `showy-quota-zellij.wasm`
 - Documentation title: `CodexBar Quota for Zellij`
 
 Do not pretend this is generic if it depends on CodexBar. A future generic data
@@ -127,9 +127,9 @@ first plugin should be honest: it renders CodexBar quota data for Zellij.
 
 Path 5 is the smallest plugin worth shipping. It is a `load_plugins` background
 plugin that subscribes to Zellij application-state events and pushes the cached
-strip into the existing zjstatus `pipe_showy_bar` widget. It does not own a
+strip into the existing zjstatus `pipe_showy_quota` widget. It does not own a
 row, does not replace zjstatus, and does not need `RunCommands` — it consumes
-the same on-disk cache that `bin/showy-bar-fetch` already produces.
+the same on-disk cache that `bin/showy-quota-fetch` already produces.
 
 ### Shape
 
@@ -138,12 +138,12 @@ Zellij plugin (headless, no visible pane)
   ├─ load_plugins on session start
   ├─ subscribes to TabUpdate, Visible, Timer, PermissionRequestResult
   ├─ on TabUpdate or Visible: read cache → render ANSI → pipe_message_to_plugin
-  ├─ on Timer (every SHOWY_BAR_ZELLIJ_PIPE_INTERVAL): same
+  ├─ on Timer (every SHOWY_QUOTA_ZELLIJ_PIPE_INTERVAL): same
   └─ never renders into its own pane
 ```
 
 The pipe payload uses the same `zjstatus::pipe::pipe_<name>::<output>` envelope
-that `showy-bar-zellij-pipe` already produces, so the existing layout fragment
+that `showy-quota-zellij-pipe` already produces, so the existing layout fragment
 needs no change.
 
 ### Why this path
@@ -152,11 +152,11 @@ needs no change.
   tab is created or focused; the plugin pipes the strip into zjstatus before
   the user sees the empty widget. This is the documented friction in the
   current baseline above.
-- **Removes the external feeder process.** `showy-bar-zellij-pipe` becomes
+- **Removes the external feeder process.** `showy-quota-zellij-pipe` becomes
   optional; the plugin's `Timer` subscription handles periodic refresh on the
   same interval.
 - **Removes the kick/new-tab wrappers from the native path.** No more
-  `showy-bar-zellij-{kick,new-tab}` for users on this path. Terminal-emulator
+  `showy-quota-zellij-{kick,new-tab}` for users on this path. Terminal-emulator
   keybinds can call plain `zellij action new-tab` again.
 - **Validated pattern.** [b0o/zjstatus-hints](https://github.com/b0o/zjstatus-hints)
   ships exactly this shape — `load_plugins` headless plugin, subscribes to
@@ -169,7 +169,7 @@ needs no change.
 ### Tradeoffs vs Path 3
 
 - Still depends on zjstatus. Users who reject zjstatus need Path 3.
-- Still needs the on-disk cache. Either `showy-bar-fetch` runs out-of-band on a
+- Still needs the on-disk cache. Either `showy-quota-fetch` runs out-of-band on a
   timer (cron, launchd, terminal wrapper) or the plugin gains `RunCommands` to
   invoke it — at which point most of Path 3's complexity has crept in.
 - Permission prompt for `load_plugins` headless plugins appears in a hidden
@@ -194,7 +194,7 @@ without rewriting the data plane.
 Zellij plugin pane
   ├─ subscribes to Timer / Visible / RunCommandResult
   ├─ optionally subscribes to TabUpdate
-  ├─ calls configured showy-bar-fetch via run_command
+  ├─ calls configured showy-quota-fetch via run_command
   ├─ parses CodexBar provider JSON in Rust
   ├─ stores last-good parsed state
   └─ renders the ANSI quota strip directly from render()
@@ -206,7 +206,7 @@ Zellij plugin pane
 - Removes the zjstatus dependency for users who opt into the plugin.
 - Removes pipe backpressure and empty pipe state from the default native path.
 - Preserves the cache, lock, validation, and stale-data behavior already proven
-  in `showy-bar-fetch`.
+  in `showy-quota-fetch`.
 - Limits Rust scope to schema parsing, filtering, theme/config reading, and ANSI
   rendering.
 - Creates a clean seam for Path 4 later.
@@ -240,7 +240,7 @@ request_permission(&[
 
 Avoid by default:
 
-- `FullHdAccess`: do not read `~/.cache/showy-bar/usage.json` directly from the
+- `FullHdAccess`: do not read `~/.cache/showy-quota/usage.json` directly from the
   plugin in the first version.
 - `ReadSessionEnvironmentVariables`: prefer explicit `fetch_bin` or
   `codexbar_bin` config instead of implicit PATH discovery.
@@ -310,7 +310,7 @@ refresh(reason):
   run_command([fetch_bin], context={ request_id, reason })
 ```
 
-`showy-bar-fetch` already gates CodexBar refreshes. Even so, the plugin should
+`showy-quota-fetch` already gates CodexBar refreshes. Even so, the plugin should
 avoid launching repeated helper processes on every render, resize, or tab event.
 
 #### `RunCommandResult`
@@ -359,8 +359,8 @@ KDL example:
 
 ```kdl
 pane size=1 borderless=true {
-    plugin location="file:/Users/me/.config/zellij/plugins/showy-bar-zellij.wasm" {
-        fetch_bin "/Users/me/.local/bin/showy-bar-fetch"
+    plugin location="file:/Users/me/.config/zellij/plugins/showy-quota-zellij.wasm" {
+        fetch_bin "/Users/me/.local/bin/showy-quota-fetch"
         refresh_seconds "120"
         providers "codex,claude,gemini"
         providers_exclude ""
@@ -377,14 +377,14 @@ Configuration principles:
 
 - Prefer explicit paths over shell lookup.
 - Default to the same provider order and thresholds as shell renderers.
-- Keep names close to existing `SHOWY_BAR_*` variables.
+- Keep names close to existing `SHOWY_QUOTA_*` variables.
 - Do not read user shell config from inside the plugin.
 - Support a minimal config first; add theme/source abstractions only when they
   unblock real users.
 
 ### Rendering
 
-The plugin should initially match `bin/showy-bar-zellij-bar`:
+The plugin should initially match `bin/showy-quota-zellij-bar`:
 
 ```text
 <SIGIL>▕<12-cell 5h/7d half-block bar>▏<countdown>
@@ -402,13 +402,13 @@ Rendering responsibilities:
 - Width-aware truncation when `cols` is too narrow.
 - No trailing newline surprises beyond what Zellij render expects.
 
-Snapshot tests should compare Rust output against `showy-bar-zellij-bar --json`
+Snapshot tests should compare Rust output against `showy-quota-zellij-bar --json`
 for the existing fixture set wherever exact parity is expected.
 
 ### Path 3 repository layout
 
 ```text
-showy-bar/
+showy-quota/
   Cargo.toml
   crates/
     showy-zellij-plugin/
@@ -424,10 +424,10 @@ showy-bar/
       tests/
         fixtures.rs
   bin/
-    showy-bar-fetch
-    showy-bar-zellij-bar
-    showy-bar-zellij-pipe        # legacy path
-    showy-bar-zellij-kick        # legacy path
+    showy-quota-fetch
+    showy-quota-zellij-bar
+    showy-quota-zellij-pipe        # legacy path
+    showy-quota-zellij-kick        # legacy path
   zellij/
     layout-plugin.kdl.fragment
     layout-pane.kdl.fragment     # legacy zjstatus path
@@ -512,7 +512,7 @@ Keep target-specific:
 ### Path 4 repository layout
 
 ```text
-showy-bar/
+showy-quota/
   Cargo.toml
   crates/
     showy-core/
@@ -551,7 +551,7 @@ showy-bar/
   zellij/
     plugin/
       layout-plugin.kdl.fragment
-      showy-bar.kdl.example
+      showy-quota.kdl.example
     legacy-zjstatus/
       layout-pane.kdl.fragment
   share/
@@ -601,20 +601,20 @@ Documentation should present two supported Zellij paths:
 
 Migration for plugin users:
 
-- Install or download `showy-bar-zellij.wasm`.
-- Keep `showy-bar-fetch` installed for Path 3.
+- Install or download `showy-quota-zellij.wasm`.
+- Keep `showy-quota-fetch` installed for Path 3.
 - Add `layout-plugin.kdl.fragment` to Zellij layout.
 - Remove the zjstatus pipe pane from that layout.
-- Stop launching `showy-bar-zellij-pipe` for that session.
-- Stop binding `showy-bar-zellij-new-tab` for immediate paint; normal Zellij
+- Stop launching `showy-quota-zellij-pipe` for that session.
+- Stop binding `showy-quota-zellij-new-tab` for immediate paint; normal Zellij
   new-tab actions should paint through plugin lifecycle events.
 - Keep the detail pane if desired; it remains CodexBar's text UI.
 
 Legacy users keep:
 
-- `showy-bar-zellij-pipe`
-- `showy-bar-zellij-kick`
-- `showy-bar-zellij-new-tab`
+- `showy-quota-zellij-pipe`
+- `showy-quota-zellij-kick`
+- `showy-quota-zellij-new-tab`
 - `zellij/layout-pane.kdl.fragment`
 
 ## Prototype checklist
@@ -636,7 +636,7 @@ Legacy users keep:
 
 - Read plugin config.
 - Request `RunCommands`.
-- Call configured `showy-bar-fetch` with `run_command`.
+- Call configured `showy-quota-fetch` with `run_command`.
 - Match results by request id.
 - Parse stdout.
 - Preserve last-good state on bad output.
@@ -646,7 +646,7 @@ Legacy users keep:
 ### Phase 3: timer and visibility behavior
 
 - Subscribe to `Timer` and `Visible`.
-- Default refresh interval to the current `SHOWY_BAR_REFRESH_SECONDS` behavior.
+- Default refresh interval to the current `SHOWY_QUOTA_REFRESH_SECONDS` behavior.
 - Track `in_flight` so at most one helper command runs at a time.
 - Avoid refreshes while hidden unless needed for first paint.
 - Repaint from cached state on visibility changes.
@@ -663,8 +663,8 @@ Legacy users keep:
 ### Phase 5: parity and release hardening
 
 - Port fixture tests from `test/render_test.sh` into Rust snapshot tests.
-- Compare output with `bin/showy-bar-zellij-bar --json` for fixtures.
-- Add CI artifact build for `showy-bar-zellij.wasm`.
+- Compare output with `bin/showy-quota-zellij-bar --json` for fixtures.
+- Add CI artifact build for `showy-quota-zellij.wasm`.
 - Add KDL snippets and screenshots.
 - Add failure-mode tests and documented degraded states.
 
@@ -689,8 +689,8 @@ Legacy users keep:
 - First launch with no cache.
 - Cache exists and is fresh.
 - Cache older than `2 × refresh_seconds`.
-- `showy-bar-fetch` exits nonzero.
-- `showy-bar-fetch` returns empty stdout.
+- `showy-quota-fetch` exits nonzero.
+- `showy-quota-fetch` returns empty stdout.
 - CodexBar is missing.
 - CodexBar hangs or exceeds helper lock wait.
 - Multiple plugin instances call refresh at once.
@@ -723,7 +723,7 @@ Record at least:
 
 A community-friendly release should include:
 
-- `showy-bar-zellij.wasm` attached to GitHub releases.
+- `showy-quota-zellij.wasm` attached to GitHub releases.
 - Checksums for the WASM artifact.
 - A copy-pasteable `layout-plugin.kdl.fragment`.
 - Legacy `layout-pane.kdl.fragment` retained and clearly marked.
@@ -792,12 +792,12 @@ shareable Zellij integration people actually want to install.
   string parsing?
 - Can the release artifact target `wasm32-wasip1`, `wasm32-wasi`, or both?
 - What is the smallest acceptable permission prompt for a plugin that shells out
-  to `showy-bar-fetch`?
-- Should the plugin command default to `showy-bar-fetch` or require an explicit
+  to `showy-quota-fetch`?
+- Should the plugin command default to `showy-quota-fetch` or require an explicit
   absolute path in KDL?
-- Should theme selection be plugin-local, inherited from showy-bar config, or
+- Should theme selection be plugin-local, inherited from showy-quota config, or
   mapped from Zellij theme colors?
-- How much exact byte-for-byte parity with `showy-bar-zellij-bar` is required?
+- How much exact byte-for-byte parity with `showy-quota-zellij-bar` is required?
 - Would users prefer a one-line pane, replacement status bar, or both?
 - Is CodexBar-specific naming better than generic AI quota naming for discovery?
 - At what point, if any, should the plugin move to its own repository?

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# showy-bar — browse, preview, and persist palette themes.
+# showy-quota — browse, preview, and persist palette themes.
 
 if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
-    printf 'showy-bar: bash 4+ required (running %s). On macOS, install Homebrew bash and ensure it precedes /bin/bash on PATH.\n' "${BASH_VERSION:-unknown}" >&2
+    printf 'showy-quota: bash 4+ required (running %s). On macOS, install Homebrew bash and ensure it precedes /bin/bash on PATH.\n' "${BASH_VERSION:-unknown}" >&2
     exit 1
 fi
 
@@ -19,21 +19,21 @@ while [[ -L "${SCRIPT_PATH}" ]]; do
 done
 SCRIPT_DIR="$(cd -- "$(dirname -- "${SCRIPT_PATH}")" && pwd -P)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd -P)"
-CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/showy-bar"
+CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/showy-quota"
 CONFIG_FILE="${CONFIG_DIR}/config.env"
-RENDERER="${SCRIPT_DIR}/showy-bar-zellij-bar"
+RENDERER="${SCRIPT_DIR}/showy-quota-zellij-bar"
 THEME_NAME_RE='^[A-Za-z0-9._-]+$'
 
 usage() {
     printf '%s\n' \
-        'Usage: showy-bar [--set <name>|--unset|--current|--list|--preview <name>|--diagnose]' \
+        'Usage: showy-quota [--set <name>|--unset|--current|--list|--preview <name>|--diagnose]' \
         '' \
         'With no flags, opens an interactive theme selector when fzf and a TTY are available.' \
         'Without fzf or a TTY, prints a deterministic theme list and exact set/unset commands.' \
         '' \
         'Flags:' \
-        '  --set <name>      Persist SHOWY_BAR_THEME=<name> in config.env' \
-        '  --unset           Remove the active SHOWY_BAR_THEME= line from config.env' \
+        '  --set <name>      Persist SHOWY_QUOTA_THEME=<name> in config.env' \
+        '  --unset           Remove the active SHOWY_QUOTA_THEME= line from config.env' \
         '  --current         Print the persisted theme name, or (none)' \
         '  --list            Print available theme names, one per line' \
         '  --preview <name>  Print one ANSI preview strip for a theme' \
@@ -42,13 +42,13 @@ usage() {
 }
 
 usage_error() {
-    printf 'showy-bar: %s\n\n' "$1" >&2
+    printf 'showy-quota: %s\n\n' "$1" >&2
     usage >&2
     exit 2
 }
 
 die() {
-    printf 'showy-bar: %s\n' "$1" >&2
+    printf 'showy-quota: %s\n' "$1" >&2
     exit 1
 }
 
@@ -107,13 +107,13 @@ validate_theme_or_die() {
         die 'theme name is required'
     fi
     if [[ ! "${name}" =~ ${THEME_NAME_RE} ]]; then
-        printf 'showy-bar: invalid theme name: %s\n' "${name}" >&2
-        printf 'showy-bar: names may contain only A-Z, a-z, 0-9, dot, underscore, and dash\n' >&2
+        printf 'showy-quota: invalid theme name: %s\n' "${name}" >&2
+        printf 'showy-quota: names may contain only A-Z, a-z, 0-9, dot, underscore, and dash\n' >&2
         print_available_themes >&2
         exit 1
     fi
     if ! find_theme_path "${name}" >/dev/null; then
-        printf 'showy-bar: unknown theme: %s\n' "${name}" >&2
+        printf 'showy-quota: unknown theme: %s\n' "${name}" >&2
         print_available_themes >&2
         exit 1
     fi
@@ -134,7 +134,7 @@ current_theme_value() {
     [[ -r "${CONFIG_FILE}" ]] || return 0
 
     while IFS= read -r line || [[ -n "${line}" ]]; do
-        if [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?SHOWY_BAR_THEME= ]]; then
+        if [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?SHOWY_QUOTA_THEME= ]]; then
             value="${line#*=}"
             value="${value%%[[:space:]]*}"
             value=$(strip_matching_quotes "${value}")
@@ -168,7 +168,7 @@ write_config_lines() {
     fi
 
     for line in "${lines[@]}"; do
-        if [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?SHOWY_BAR_THEME= ]]; then
+        if [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?SHOWY_QUOTA_THEME= ]]; then
             matched=1
             break
         fi
@@ -182,9 +182,9 @@ write_config_lines() {
     if ! {
         for i in "${!lines[@]}"; do
             line="${lines[$i]}"
-            if [[ "${line}" =~ ^([[:space:]]*)(export[[:space:]]+)?SHOWY_BAR_THEME= ]]; then
+            if [[ "${line}" =~ ^([[:space:]]*)(export[[:space:]]+)?SHOWY_QUOTA_THEME= ]]; then
                 if [[ "${mode}" == "set" && "${wrote}" == 0 ]]; then
-                    printf '%s%sSHOWY_BAR_THEME=%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]:-}" "${theme}"
+                    printf '%s%sSHOWY_QUOTA_THEME=%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]:-}" "${theme}"
                     wrote=1
                 fi
                 continue
@@ -197,7 +197,7 @@ write_config_lines() {
                 last_index=$((${#lines[@]} - 1))
                 [[ -z "${lines[$last_index]}" ]] || printf '\n'
             fi
-            printf 'SHOWY_BAR_THEME=%s\n' "${theme}"
+            printf 'SHOWY_QUOTA_THEME=%s\n' "${theme}"
         fi
     } > "${tmp}"; then
         rm -f -- "${tmp}"
@@ -247,8 +247,8 @@ print_fallback_selector() {
         printf '  %s\n' "${name}"
     done < <(ordered_theme_names "${current}")
     (( any )) || printf '  (none)\n'
-    printf '\nSet a theme:\n  showy-bar --set <name>\n'
-    printf 'Unset persisted theme:\n  showy-bar --unset\n'
+    printf '\nSet a theme:\n  showy-quota --set <name>\n'
+    printf 'Unset persisted theme:\n  showy-quota --unset\n'
 }
 
 run_fzf_selector() {
@@ -270,7 +270,7 @@ run_fzf_selector() {
 run_selector() {
     local current
     current=$(current_theme_value)
-    if [[ -z "${SHOWY_BAR_TEST_NO_FZF:-}" ]] && [[ -t 0 ]] && command -v fzf >/dev/null 2>&1; then
+    if [[ -z "${SHOWY_QUOTA_TEST_NO_FZF:-}" ]] && [[ -t 0 ]] && command -v fzf >/dev/null 2>&1; then
         run_fzf_selector "${current}"
     else
         print_fallback_selector "${current}"
@@ -296,10 +296,10 @@ preview_theme() {
     local name="$1"
     validate_theme_or_die "${name}"
 
-    SHOWY_BAR_THEME="${name}" \
-        SHOWY_BAR_NO_CONFIG=1 \
-        SHOWY_BAR_FORCE_COLOR=1 \
-        SHOWY_BAR_NOW_EPOCH=4070908800 \
+    SHOWY_QUOTA_THEME="${name}" \
+        SHOWY_QUOTA_NO_CONFIG=1 \
+        SHOWY_QUOTA_FORCE_COLOR=1 \
+        SHOWY_QUOTA_NOW_EPOCH=4070908800 \
         "${RENDERER}" --json - < <(preview_fixture_json)
 }
 
@@ -314,11 +314,11 @@ print_tool_path() {
 
 diagnose() {
     local fetch_bin state_bin cache_path cache_age
-    fetch_bin="${SCRIPT_DIR}/showy-bar-fetch"
-    state_bin="${SCRIPT_DIR}/showy-bar-state"
+    fetch_bin="${SCRIPT_DIR}/showy-quota-fetch"
+    state_bin="${SCRIPT_DIR}/showy-quota-state"
 
-    printf '## showy-bar diagnose\n'
-    printf 'showy-bar:    %s\n' "${SCRIPT_PATH}"
+    printf '## showy-quota diagnose\n'
+    printf 'showy-quota:    %s\n' "${SCRIPT_PATH}"
     printf 'repo root:    %s\n' "${REPO_ROOT}"
     printf 'bash:         %s\n' "${BASH_VERSION:-unknown}"
     printf 'uname:        %s\n' "$(uname -srm 2>/dev/null || printf 'unknown')"
@@ -358,40 +358,40 @@ diagnose() {
             printf 'cache size:   (file absent)\n'
         fi
     else
-        printf 'cache:        showy-bar-fetch missing or non-executable: %s\n' "${fetch_bin}"
+        printf 'cache:        showy-quota-fetch missing or non-executable: %s\n' "${fetch_bin}"
     fi
 
     printf '\n# State\n'
     if [[ -x "${state_bin}" ]]; then
         "${state_bin}" 2>&1 | sed 's/^/  /'
     else
-        printf '  showy-bar-state missing or non-executable: %s\n' "${state_bin}"
+        printf '  showy-quota-state missing or non-executable: %s\n' "${state_bin}"
     fi
 
     printf '\n# Env knobs (set values only)\n'
     local var
     for var in \
-        SHOWY_BAR_REFRESH_SECONDS \
-        SHOWY_BAR_LOCK_WAIT_TENTHS \
-        SHOWY_BAR_CACHE_DIR \
-        SHOWY_BAR_CODEXBAR_BIN \
-        SHOWY_BAR_CODEXBAR_SERVE_URL \
-        SHOWY_BAR_CODEXBAR_SERVE_TIMEOUT_SECONDS \
-        SHOWY_BAR_CODEXBAR_SERVE_REFRESH_SECONDS \
-        SHOWY_BAR_PROVIDERS \
-        SHOWY_BAR_PROVIDERS_EXCLUDE \
-        SHOWY_BAR_PROVIDER_ORDER \
-        SHOWY_BAR_INCLUDE_STATUS \
-        SHOWY_BAR_THEME \
-        SHOWY_BAR_TIME_WARN_MINUTES \
-        SHOWY_BAR_DEBUG \
-        SHOWY_BAR_FORCE_COLOR \
-        SHOWY_BAR_NO_CONFIG \
-        SHOWY_BAR_SKETCHYBAR_PROVIDER_ICON_MODE \
-        SHOWY_BAR_SKETCHYBAR_UPDATE_FREQ \
-        SHOWY_BAR_ZELLIJ_WIDGET \
-        SHOWY_BAR_ZELLIJ_PIPE_INTERVAL \
-        SHOWY_BAR_ZELLIJ_BIN
+        SHOWY_QUOTA_REFRESH_SECONDS \
+        SHOWY_QUOTA_LOCK_WAIT_TENTHS \
+        SHOWY_QUOTA_CACHE_DIR \
+        SHOWY_QUOTA_CODEXBAR_BIN \
+        SHOWY_QUOTA_CODEXBAR_SERVE_URL \
+        SHOWY_QUOTA_CODEXBAR_SERVE_TIMEOUT_SECONDS \
+        SHOWY_QUOTA_CODEXBAR_SERVE_REFRESH_SECONDS \
+        SHOWY_QUOTA_PROVIDERS \
+        SHOWY_QUOTA_PROVIDERS_EXCLUDE \
+        SHOWY_QUOTA_PROVIDER_ORDER \
+        SHOWY_QUOTA_INCLUDE_STATUS \
+        SHOWY_QUOTA_THEME \
+        SHOWY_QUOTA_TIME_WARN_MINUTES \
+        SHOWY_QUOTA_DEBUG \
+        SHOWY_QUOTA_FORCE_COLOR \
+        SHOWY_QUOTA_NO_CONFIG \
+        SHOWY_QUOTA_SKETCHYBAR_PROVIDER_ICON_MODE \
+        SHOWY_QUOTA_SKETCHYBAR_UPDATE_FREQ \
+        SHOWY_QUOTA_ZELLIJ_WIDGET \
+        SHOWY_QUOTA_ZELLIJ_PIPE_INTERVAL \
+        SHOWY_QUOTA_ZELLIJ_BIN
     do
         if [[ -n "${!var:-}" ]]; then
             printf '  %s=%s\n' "${var}" "${!var}"
@@ -399,19 +399,19 @@ diagnose() {
     done
 
     printf '\n# CodexBar probe\n'
-    local cb="${SHOWY_BAR_CODEXBAR_BIN:-codexbar}"
+    local cb="${SHOWY_QUOTA_CODEXBAR_BIN:-codexbar}"
     if ! command -v "${cb}" >/dev/null 2>&1; then
-        printf 'codexbar binary not on PATH (set SHOWY_BAR_CODEXBAR_BIN or install codexbar)\n'
+        printf 'codexbar binary not on PATH (set SHOWY_QUOTA_CODEXBAR_BIN or install codexbar)\n'
     elif ! command -v jq >/dev/null 2>&1; then
         printf 'codexbar present; jq missing — cannot count providers\n'
-    elif [[ -f "${SHOWY_BAR_USAGE_FILE:-${HOME}/.cache/showy-bar/usage.json}" ]]; then
+    elif [[ -f "${SHOWY_QUOTA_USAGE_FILE:-${HOME}/.cache/showy-quota/usage.json}" ]]; then
         local cache_file count
-        cache_file="${SHOWY_BAR_USAGE_FILE:-${HOME}/.cache/showy-bar/usage.json}"
+        cache_file="${SHOWY_QUOTA_USAGE_FILE:-${HOME}/.cache/showy-quota/usage.json}"
         count=$(jq 'length' "${cache_file}" 2>/dev/null || printf '?')
         printf 'cached provider count = %s (from %s)\n' "${count}" "${cache_file}"
-        printf '(skipping live %s usage probe; rerun bin/showy-bar-fetch --refresh to refresh)\n' "${cb}"
+        printf '(skipping live %s usage probe; rerun bin/showy-quota-fetch --refresh to refresh)\n' "${cb}"
     else
-        printf 'no cache yet; run bin/showy-bar-fetch --refresh to populate, then re-run --diagnose\n'
+        printf 'no cache yet; run bin/showy-quota-fetch --refresh to populate, then re-run --diagnose\n'
     fi
 }
 

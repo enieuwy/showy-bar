@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# showy-bar — shared CodexBar JSON fetcher.
+# showy-quota — shared CodexBar JSON fetcher.
 #
 # Returns cached CodexBar usage JSON.
-# Refreshes the cache when older than SHOWY_BAR_REFRESH_SECONDS, atomically.
+# Refreshes the cache when older than SHOWY_QUOTA_REFRESH_SECONDS, atomically.
 # Refreshes read /usage from the default localhost `codexbar serve` endpoint
-# first; set SHOWY_BAR_CODEXBAR_SERVE_URL= to skip the HTTP probe.
+# first; set SHOWY_QUOTA_CODEXBAR_SERVE_URL= to skip the HTTP probe.
 # Always prints the most recent good cache when refresh fails.
 #
 # Exit 0 whenever any cache content was emitted (fresh or stale).
@@ -47,21 +47,21 @@ while (($#)); do
             sed -n '2,18p' "$0"
             exit 0
             ;;
-        *) showy_bar_die "unknown argument: $1" ;;
+        *) showy_quota_die "unknown argument: $1" ;;
     esac
     shift
 done
 
-mkdir -p "${SHOWY_BAR_CACHE_DIR}"
-chmod 700 "${SHOWY_BAR_CACHE_DIR}" 2>/dev/null || true
+mkdir -p "${SHOWY_QUOTA_CACHE_DIR}"
+chmod 700 "${SHOWY_QUOTA_CACHE_DIR}" 2>/dev/null || true
 
 if [[ "${mode}" == "path" ]]; then
-    printf '%s\n' "${SHOWY_BAR_USAGE_FILE}"
+    printf '%s\n' "${SHOWY_QUOTA_USAGE_FILE}"
     exit 0
 fi
 
 if [[ "${mode}" == "age" ]]; then
-    showy_bar_age_seconds "${SHOWY_BAR_USAGE_FILE}"
+    showy_quota_age_seconds "${SHOWY_QUOTA_USAGE_FILE}"
     exit 0
 fi
 
@@ -76,25 +76,25 @@ fi
 #   0 = lock was held and the callee ran;
 #   2 = lock was held by another worker; caller may wait for cache;
 #   3 = mkdir lock owner is ambiguous; caller should wait then retry recovery.
-SHOWY_BAR_HELD_LOCK_DIR=""
+SHOWY_QUOTA_HELD_LOCK_DIR=""
 
-showy_bar_release_mkdir_lock() {
-    if [[ -n "${SHOWY_BAR_HELD_LOCK_DIR:-}" ]]; then
-        local owner_file="${SHOWY_BAR_HELD_LOCK_DIR}/owner.pid"
+showy_quota_release_mkdir_lock() {
+    if [[ -n "${SHOWY_QUOTA_HELD_LOCK_DIR:-}" ]]; then
+        local owner_file="${SHOWY_QUOTA_HELD_LOCK_DIR}/owner.pid"
         local owner_pid=""
         if [[ ! -e "${owner_file}" ]]; then
-            rmdir -- "${SHOWY_BAR_HELD_LOCK_DIR}" 2>/dev/null || true
+            rmdir -- "${SHOWY_QUOTA_HELD_LOCK_DIR}" 2>/dev/null || true
         elif [[ -r "${owner_file}" ]] && IFS= read -r owner_pid < "${owner_file}" && [[ "${owner_pid}" == "$$" ]]; then
             rm -f -- "${owner_file}"
-            rmdir -- "${SHOWY_BAR_HELD_LOCK_DIR}" 2>/dev/null || true
+            rmdir -- "${SHOWY_QUOTA_HELD_LOCK_DIR}" 2>/dev/null || true
         else
-            showy_bar_log "not releasing mkdir lock now owned by pid ${owner_pid:-unknown}"
+            showy_quota_log "not releasing mkdir lock now owned by pid ${owner_pid:-unknown}"
         fi
-        SHOWY_BAR_HELD_LOCK_DIR=""
+        SHOWY_QUOTA_HELD_LOCK_DIR=""
     fi
 }
 
-showy_bar_process_state() {
+showy_quota_process_state() {
     local pid="$1"
     local state=""
     if state=$(ps -o state= -p "${pid}" 2>/dev/null) \
@@ -107,10 +107,10 @@ showy_bar_process_state() {
     return 1
 }
 
-showy_bar_lock_age_seconds() {
+showy_quota_lock_age_seconds() {
     local lock_dir="$1"
     local now mtime
-    now=$(showy_bar_now_epoch)
+    now=$(showy_quota_now_epoch)
     if mtime=$(stat -f %m "${lock_dir}" 2>/dev/null) \
         || mtime=$(stat -c %Y "${lock_dir}" 2>/dev/null); then
         printf '%s\n' $((now - mtime))
@@ -119,29 +119,29 @@ showy_bar_lock_age_seconds() {
     return 1
 }
 
-showy_bar_run_with_mkdir_lock() {
+showy_quota_run_with_mkdir_lock() {
     local lock_dir="$1"
     shift
-    SHOWY_BAR_HELD_LOCK_DIR="${lock_dir}"
+    SHOWY_QUOTA_HELD_LOCK_DIR="${lock_dir}"
     if ! printf '%s\n' "$$" > "${lock_dir}/owner.pid"; then
-        showy_bar_release_mkdir_lock
+        showy_quota_release_mkdir_lock
         return 1
     fi
-    trap showy_bar_release_mkdir_lock EXIT
+    trap showy_quota_release_mkdir_lock EXIT
     local rc=0
     "$@" || rc=$?
-    showy_bar_release_mkdir_lock
+    showy_quota_release_mkdir_lock
     trap - EXIT
     return "${rc}"
 }
 
-showy_bar_recover_mkdir_lock() {
+showy_quota_recover_mkdir_lock() {
     local lock_dir="$1"
     local owner_file="${lock_dir}/owner.pid"
     local owner_pid=""
     local stale_reason="ownerless"
     local lock_age=""
-    local hard_max_age="${SHOWY_BAR_REFRESH_SECONDS:-120}"
+    local hard_max_age="${SHOWY_QUOTA_REFRESH_SECONDS:-120}"
     [[ "${hard_max_age}" =~ ^[0-9]+$ ]] || hard_max_age=120
     (( hard_max_age < 60 )) && hard_max_age=60
 
@@ -151,25 +151,25 @@ showy_bar_recover_mkdir_lock() {
             if ! kill -0 "${owner_pid}" 2>/dev/null; then
                 rm -f -- "${owner_file}"
                 if rmdir -- "${lock_dir}" 2>/dev/null; then
-                    showy_bar_log "recovered dead mkdir lock owned by pid ${owner_pid}"
+                    showy_quota_log "recovered dead mkdir lock owned by pid ${owner_pid}"
                     return 0
                 fi
             fi
 
             local owner_state=""
-            owner_state=$(showy_bar_process_state "${owner_pid}" || true)
+            owner_state=$(showy_quota_process_state "${owner_pid}" || true)
             if [[ "${owner_state}" == [TZ]* ]]; then
                 rm -f -- "${owner_file}"
                 if rmdir -- "${lock_dir}" 2>/dev/null; then
-                    showy_bar_log "recovered stopped mkdir lock owned by pid ${owner_pid} (state ${owner_state})"
+                    showy_quota_log "recovered stopped mkdir lock owned by pid ${owner_pid} (state ${owner_state})"
                     return 0
                 fi
             fi
 
-            if lock_age=$(showy_bar_lock_age_seconds "${lock_dir}") && (( lock_age >= hard_max_age )); then
+            if lock_age=$(showy_quota_lock_age_seconds "${lock_dir}") && (( lock_age >= hard_max_age )); then
                 rm -f -- "${owner_file}"
                 if rmdir -- "${lock_dir}" 2>/dev/null; then
-                    showy_bar_log "recovered aged mkdir lock owned by pid ${owner_pid} (age ${lock_age}s)"
+                    showy_quota_log "recovered aged mkdir lock owned by pid ${owner_pid} (age ${lock_age}s)"
                     return 0
                 fi
             fi
@@ -184,12 +184,12 @@ showy_bar_recover_mkdir_lock() {
     # was truncated before the PID landed, or is not readable. Only steal
     # these ambiguous locks after the normal wait horizon has elapsed.
     local max_age
-    max_age=$(( (SHOWY_BAR_LOCK_WAIT_TENTHS + 9) / 10 ))
+    max_age=$(( (SHOWY_QUOTA_LOCK_WAIT_TENTHS + 9) / 10 ))
     (( max_age < 1 )) && max_age=1
-    if lock_age=$(showy_bar_lock_age_seconds "${lock_dir}") && (( lock_age >= max_age )); then
+    if lock_age=$(showy_quota_lock_age_seconds "${lock_dir}") && (( lock_age >= max_age )); then
         rm -f -- "${owner_file}"
         if rmdir -- "${lock_dir}" 2>/dev/null; then
-            showy_bar_log "recovered ${stale_reason} mkdir lock"
+            showy_quota_log "recovered ${stale_reason} mkdir lock"
             return 0
         fi
     fi
@@ -197,32 +197,32 @@ showy_bar_recover_mkdir_lock() {
     return 3
 }
 
-showy_bar_with_lock() {
-    if [[ -z "${SHOWY_BAR_FORCE_NO_FLOCK:-}" ]] && showy_bar_have flock; then
+showy_quota_with_lock() {
+    if [[ -z "${SHOWY_QUOTA_FORCE_NO_FLOCK:-}" ]] && showy_quota_have flock; then
         local rc=2
         # subshell + fd 9 so the lock releases on exit.
         (
-            exec 9>"${SHOWY_BAR_USAGE_LOCK}"
+            exec 9>"${SHOWY_QUOTA_USAGE_LOCK}"
             if flock -n 9; then
                 "$@"
             else
-                showy_bar_log "another fetch in flight (flock); will wait"
+                showy_quota_log "another fetch in flight (flock); will wait"
                 exit 2
             fi
         ) && rc=$? || rc=$?
         return "${rc}"
     fi
 
-    local lock_dir="${SHOWY_BAR_USAGE_LOCK}.d"
+    local lock_dir="${SHOWY_QUOTA_USAGE_LOCK}.d"
     if mkdir -- "${lock_dir}" 2>/dev/null; then
-        showy_bar_run_with_mkdir_lock "${lock_dir}" "$@"
+        showy_quota_run_with_mkdir_lock "${lock_dir}" "$@"
         return $?
     fi
 
     local recover_rc=0
-    if showy_bar_recover_mkdir_lock "${lock_dir}"; then
+    if showy_quota_recover_mkdir_lock "${lock_dir}"; then
         if mkdir -- "${lock_dir}" 2>/dev/null; then
-            showy_bar_run_with_mkdir_lock "${lock_dir}" "$@"
+            showy_quota_run_with_mkdir_lock "${lock_dir}" "$@"
             return $?
         fi
     else
@@ -230,22 +230,22 @@ showy_bar_with_lock() {
     fi
 
     if (( recover_rc == 3 )); then
-        showy_bar_log "ambiguous mkdir lock owner; will wait"
+        showy_quota_log "ambiguous mkdir lock owner; will wait"
         return 3
     fi
 
-    showy_bar_log "another fetch in flight (mkdir); will wait"
+    showy_quota_log "another fetch in flight (mkdir); will wait"
     return 2
 }
 
 cache_token() {
-    [[ -s "${SHOWY_BAR_USAGE_FILE}" ]] || { printf '\n'; return; }
-    if [[ -s "${SHOWY_BAR_USAGE_STAMP}" ]]; then
-        printf 'stamp:%s\n' "$(< "${SHOWY_BAR_USAGE_STAMP}")"
+    [[ -s "${SHOWY_QUOTA_USAGE_FILE}" ]] || { printf '\n'; return; }
+    if [[ -s "${SHOWY_QUOTA_USAGE_STAMP}" ]]; then
+        printf 'stamp:%s\n' "$(< "${SHOWY_QUOTA_USAGE_STAMP}")"
         return
     fi
-    stat -f 'file:%i:%m:%z' "${SHOWY_BAR_USAGE_FILE}" 2>/dev/null \
-        || stat -c 'file:%i:%Y:%s' "${SHOWY_BAR_USAGE_FILE}" 2>/dev/null \
+    stat -f 'file:%i:%m:%z' "${SHOWY_QUOTA_USAGE_FILE}" 2>/dev/null \
+        || stat -c 'file:%i:%Y:%s' "${SHOWY_QUOTA_USAGE_FILE}" 2>/dev/null \
         || printf 'file:unknown\n'
 }
 
@@ -255,13 +255,13 @@ cache_token() {
 # enough: the cache file mtime must also satisfy cache_is_fresh. This avoids
 # forced-refresh losers returning an old-but-token-different cache on slow or
 # odd filesystem/stat combinations.
-showy_bar_wait_for_cache() {
+showy_quota_wait_for_cache() {
     local max_tenths="${1:-50}"   # 5.0 s
     local previous_token="${2:-}"
     local require_fresh="${3:-0}"
     local i token
     for (( i=0; i<max_tenths; i++ )); do
-        if [[ -s "${SHOWY_BAR_USAGE_FILE}" ]] && showy_bar_json_valid "${SHOWY_BAR_USAGE_FILE}"; then
+        if [[ -s "${SHOWY_QUOTA_USAGE_FILE}" ]] && showy_quota_json_valid "${SHOWY_QUOTA_USAGE_FILE}"; then
             if [[ -z "${previous_token}" ]]; then
                 return 0
             fi
@@ -280,20 +280,20 @@ showy_bar_wait_for_cache() {
 # ── core refresh ──────────────────────────────────────────────────────
 
 run_codexbar_serve() {
-    [[ -n "${SHOWY_BAR_CODEXBAR_SERVE_URL}" ]] || return 127
-    showy_bar_have curl || {
-        showy_bar_log "curl not found for codexbar serve URL"
+    [[ -n "${SHOWY_QUOTA_CODEXBAR_SERVE_URL}" ]] || return 127
+    showy_quota_have curl || {
+        showy_quota_log "curl not found for codexbar serve URL"
         return 127
     }
 
     local base timeout
-    base="${SHOWY_BAR_CODEXBAR_SERVE_URL%/}"
+    base="${SHOWY_QUOTA_CODEXBAR_SERVE_URL%/}"
     if ! [[ "${base}" =~ ^http://(127[.]0[.]0[.]1|localhost|\[::1\])(:[0-9]+)?$ ]]; then
-        showy_bar_log "ignoring non-local codexbar serve URL: ${SHOWY_BAR_CODEXBAR_SERVE_URL}"
+        showy_quota_log "ignoring non-local codexbar serve URL: ${SHOWY_QUOTA_CODEXBAR_SERVE_URL}"
         return 127
     fi
 
-    timeout="${SHOWY_BAR_CODEXBAR_SERVE_TIMEOUT_SECONDS}"
+    timeout="${SHOWY_QUOTA_CODEXBAR_SERVE_TIMEOUT_SECONDS}"
     [[ "${timeout}" =~ ^[0-9]+([.][0-9]+)?$ ]] || timeout=0.5
     curl --fail --silent --show-error --max-time "${timeout}" "${base}/usage" 2>/dev/null
 }
@@ -322,26 +322,26 @@ serve_payload_is_publishable() {
 }
 
 run_codexbar_cli() {
-    if ! command -v "${SHOWY_BAR_CODEXBAR_BIN}" >/dev/null 2>&1; then
-        showy_bar_log "codexbar binary not found: ${SHOWY_BAR_CODEXBAR_BIN}"
+    if ! command -v "${SHOWY_QUOTA_CODEXBAR_BIN}" >/dev/null 2>&1; then
+        showy_quota_log "codexbar binary not found: ${SHOWY_QUOTA_CODEXBAR_BIN}"
         return 127
     fi
 
     local args=(usage --format json --pretty)
-    if [[ "${SHOWY_BAR_INCLUDE_STATUS}" == "1" ]]; then
+    if [[ "${SHOWY_QUOTA_INCLUDE_STATUS}" == "1" ]]; then
         args+=(--status)
     fi
-    "${SHOWY_BAR_CODEXBAR_BIN}" "${args[@]}" 2>/dev/null
+    "${SHOWY_QUOTA_CODEXBAR_BIN}" "${args[@]}" 2>/dev/null
 }
 
 run_codexbar() {
     local out
-    if [[ -n "${SHOWY_BAR_CODEXBAR_SERVE_URL}" ]]; then
+    if [[ -n "${SHOWY_QUOTA_CODEXBAR_SERVE_URL}" ]]; then
         if out=$(run_codexbar_serve) && serve_payload_is_publishable "${out}"; then
             printf '%s' "${out}"
             return 0
         fi
-        showy_bar_log "codexbar serve fetch failed or returned no renderable usage; falling back to CLI"
+        showy_quota_log "codexbar serve fetch failed or returned no renderable usage; falling back to CLI"
     fi
 
     run_codexbar_cli
@@ -349,49 +349,49 @@ run_codexbar() {
 
 publish_cache_payload() {
     local out="$1" tmp stamp_tmp
-    if ! tmp=$(mktemp "${SHOWY_BAR_CACHE_DIR}/usage.XXXXXX"); then
-        showy_bar_log "could not create temporary cache file"
+    if ! tmp=$(mktemp "${SHOWY_QUOTA_CACHE_DIR}/usage.XXXXXX"); then
+        showy_quota_log "could not create temporary cache file"
         return 1
     fi
 
     if [[ -z "${out}" || "${out:0:1}" != '[' ]]; then
         rm -f "${tmp}"
-        showy_bar_log "codexbar produced no usable output"
+        showy_quota_log "codexbar produced no usable output"
         return 1
     fi
 
     printf '%s' "${out}" > "${tmp}"
-    if showy_bar_json_valid "${tmp}"; then
-        if ! stamp_tmp=$(mktemp "${SHOWY_BAR_CACHE_DIR}/usage-stamp.XXXXXX"); then
+    if showy_quota_json_valid "${tmp}"; then
+        if ! stamp_tmp=$(mktemp "${SHOWY_QUOTA_CACHE_DIR}/usage-stamp.XXXXXX"); then
             rm -f "${tmp}"
-            showy_bar_log "could not create temporary stamp file"
+            showy_quota_log "could not create temporary stamp file"
             return 1
         fi
         printf '%s.%s.%s\n' "$(date +%s)" "$$" "${RANDOM}" > "${stamp_tmp}" || {
             rm -f "${tmp}" "${stamp_tmp}"
-            showy_bar_log "could not write temporary stamp file"
+            showy_quota_log "could not write temporary stamp file"
             return 1
         }
-        mv "${tmp}" "${SHOWY_BAR_USAGE_FILE}"
-        mv "${stamp_tmp}" "${SHOWY_BAR_USAGE_STAMP}"
-        chmod 600 "${SHOWY_BAR_USAGE_FILE}" "${SHOWY_BAR_USAGE_STAMP}" 2>/dev/null || true
-        showy_bar_log "cache refreshed (${#out} bytes)"
+        mv "${tmp}" "${SHOWY_QUOTA_USAGE_FILE}"
+        mv "${stamp_tmp}" "${SHOWY_QUOTA_USAGE_STAMP}"
+        chmod 600 "${SHOWY_QUOTA_USAGE_FILE}" "${SHOWY_QUOTA_USAGE_STAMP}" 2>/dev/null || true
+        showy_quota_log "cache refreshed (${#out} bytes)"
         return 0
     fi
 
     rm -f "${tmp}"
-    showy_bar_log "codexbar JSON failed validation"
+    showy_quota_log "codexbar JSON failed validation"
     return 1
 }
 
 refresh_cache_from_serve() {
     local out
-    [[ -n "${SHOWY_BAR_CODEXBAR_SERVE_URL}" ]] || return 127
+    [[ -n "${SHOWY_QUOTA_CODEXBAR_SERVE_URL}" ]] || return 127
     if out=$(run_codexbar_serve) && serve_payload_is_publishable "${out}"; then
         publish_cache_payload "${out}"
         return $?
     fi
-    showy_bar_log "codexbar serve fetch failed or returned no renderable usage"
+    showy_quota_log "codexbar serve fetch failed or returned no renderable usage"
     return 1
 }
 
@@ -401,7 +401,7 @@ refresh_cache() {
     rc=0
     out=$(run_codexbar) || rc=$?
     if [[ -z "${out}" || "${out:0:1}" != '[' ]]; then
-        showy_bar_log "codexbar produced no usable output (rc=${rc})"
+        showy_quota_log "codexbar produced no usable output (rc=${rc})"
         return 1
     fi
 
@@ -409,46 +409,46 @@ refresh_cache() {
 }
 
 cache_is_valid() {
-    [[ -s "${SHOWY_BAR_USAGE_FILE}" ]] || return 1
-    showy_bar_json_valid "${SHOWY_BAR_USAGE_FILE}"
+    [[ -s "${SHOWY_QUOTA_USAGE_FILE}" ]] || return 1
+    showy_quota_json_valid "${SHOWY_QUOTA_USAGE_FILE}"
 }
 
 
 cache_is_fresh() {
     cache_is_valid || return 1
     local age
-    age=$(showy_bar_age_seconds "${SHOWY_BAR_USAGE_FILE}")
-    (( age < SHOWY_BAR_REFRESH_SECONDS ))
+    age=$(showy_quota_age_seconds "${SHOWY_QUOTA_USAGE_FILE}")
+    (( age < SHOWY_QUOTA_REFRESH_SECONDS ))
 }
 
 serve_cache_is_fresh() {
-    [[ -n "${SHOWY_BAR_CODEXBAR_SERVE_URL}" ]] || return 1
+    [[ -n "${SHOWY_QUOTA_CODEXBAR_SERVE_URL}" ]] || return 1
     cache_is_valid || return 1
-    local seconds="${SHOWY_BAR_CODEXBAR_SERVE_REFRESH_SECONDS}" age
+    local seconds="${SHOWY_QUOTA_CODEXBAR_SERVE_REFRESH_SECONDS}" age
     [[ "${seconds}" =~ ^[0-9]+$ ]] || seconds=10
     seconds=$((10#${seconds}))
     (( seconds > 0 )) || return 1
-    age=$(showy_bar_age_seconds "${SHOWY_BAR_USAGE_FILE}")
+    age=$(showy_quota_age_seconds "${SHOWY_QUOTA_USAGE_FILE}")
     (( age < seconds ))
 }
 
 retry_refresh_after_lock_wait() {
     lock_rc=0
-    showy_bar_log "retrying refresh after lock wait"
-    showy_bar_with_lock refresh_cache || lock_rc=$?
+    showy_quota_log "retrying refresh after lock wait"
+    showy_quota_with_lock refresh_cache || lock_rc=$?
     if (( lock_rc == 2 || lock_rc == 3 )); then
-        showy_bar_wait_for_cache "${SHOWY_BAR_LOCK_WAIT_TENTHS}" || true
+        showy_quota_wait_for_cache "${SHOWY_QUOTA_LOCK_WAIT_TENTHS}" || true
     fi
 }
 
 lock_rc=0
 pre_refresh_token=$(cache_token)
 if (( force_refresh )); then
-    showy_bar_with_lock refresh_cache || lock_rc=$?
+    showy_quota_with_lock refresh_cache || lock_rc=$?
 elif ! cache_is_fresh; then
-    showy_bar_with_lock refresh_cache || lock_rc=$?
-elif [[ -n "${SHOWY_BAR_CODEXBAR_SERVE_URL}" ]] && ! serve_cache_is_fresh; then
-    showy_bar_with_lock refresh_cache_from_serve || lock_rc=$?
+    showy_quota_with_lock refresh_cache || lock_rc=$?
+elif [[ -n "${SHOWY_QUOTA_CODEXBAR_SERVE_URL}" ]] && ! serve_cache_is_fresh; then
+    showy_quota_with_lock refresh_cache_from_serve || lock_rc=$?
 fi
 
 # Lost the lock contest? Wait for the holder on cold/invalid cache. Ambiguous
@@ -456,18 +456,18 @@ fi
 # recovery, then fall back to an existing valid cache only if retry fails.
 if (( lock_rc == 2 || lock_rc == 3 )); then
     if (( force_refresh || lock_rc == 3 )); then
-        if ! showy_bar_wait_for_cache "${SHOWY_BAR_LOCK_WAIT_TENTHS}" "${pre_refresh_token}" "${force_refresh}"; then
+        if ! showy_quota_wait_for_cache "${SHOWY_QUOTA_LOCK_WAIT_TENTHS}" "${pre_refresh_token}" "${force_refresh}"; then
             retry_refresh_after_lock_wait
             if cache_is_valid; then
                 if [[ "$(cache_token)" == "${pre_refresh_token}" ]]; then
-                    showy_bar_log "refresh timed out; using existing cache"
+                    showy_quota_log "refresh timed out; using existing cache"
                 fi
             elif (( force_refresh )); then
-                showy_bar_die "forced refresh did not publish a valid cache"
+                showy_quota_die "forced refresh did not publish a valid cache"
             fi
         fi
     elif ! cache_is_valid; then
-        showy_bar_wait_for_cache "${SHOWY_BAR_LOCK_WAIT_TENTHS}" || true
+        showy_quota_wait_for_cache "${SHOWY_QUOTA_LOCK_WAIT_TENTHS}" || true
         cache_is_valid || retry_refresh_after_lock_wait
     fi
 fi
@@ -475,8 +475,8 @@ fi
 # Always emit the most recent valid cache. Bars must never see malformed
 # payloads as successful output.
 if cache_is_valid; then
-    cat "${SHOWY_BAR_USAGE_FILE}"
+    cat "${SHOWY_QUOTA_USAGE_FILE}"
     exit 0
 fi
 
-showy_bar_die "no codexbar JSON available and no cache present"
+showy_quota_die "no codexbar JSON available and no cache present"

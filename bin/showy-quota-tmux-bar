@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# showy-bar — tmux status-line markup renderer.
+# showy-quota — tmux status-line markup renderer.
 #
-# Designed for use in `set -ag status-right ' #(showy-bar-tmux-bar)'`. Prints
+# Designed for use in `set -ag status-right ' #(showy-quota-tmux-bar)'`. Prints
 # tmux-format markup with the same visible provider chunks as the Zellij strip.
 # Multiple providers are separated by a styled single-cell gap.
 
@@ -22,12 +22,12 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${SCRIPT_PATH}")" && pwd -P)"
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../lib/strip.sh"
 
-showy_bar_have jq || showy_bar_die "jq is required"
+showy_quota_have jq || showy_quota_die "jq is required"
 
-FETCH="${SHOWY_BAR_FETCH_BIN:-${SCRIPT_DIR}/showy-bar-fetch}"
+FETCH="${SHOWY_QUOTA_FETCH_BIN:-${SCRIPT_DIR}/showy-quota-fetch}"
 
-CAP_LEFT="${SHOWY_BAR_CAP_LEFT-}"
-CAP_RIGHT="${SHOWY_BAR_CAP_RIGHT-}"
+CAP_LEFT="${SHOWY_QUOTA_CAP_LEFT-}"
+CAP_RIGHT="${SHOWY_QUOTA_CAP_RIGHT-}"
 
 tmux_reset() { printf '#[default]'; }
 tmux_dim() { printf '#[dim]'; }
@@ -55,21 +55,21 @@ tmux_style_text() {
 tmux_dual_metric_bar() {
     local p_remaining="$1" s_remaining="$2" s_reset="$3" s_window="$4"
     local primary_override="${5:-}" secondary_override="${6:-}"
-    local width="${SHOWY_BAR_TMUX_BAR_WIDTH:-${SHOWY_BAR_ZELLIJ_BAR_WIDTH:-12}}"
+    local width="${SHOWY_QUOTA_TMUX_BAR_WIDTH:-${SHOWY_QUOTA_ZELLIJ_BAR_WIDTH:-12}}"
     [[ "${width}" =~ ^[0-9]+$ ]] || width=12
     (( width < 8 )) && width=8
 
     local primary_color secondary_color bg_color surface_color elapsed_color
-    primary_color="${primary_override:-$(showy_bar_role_color primary "${p_remaining}")}"
-    secondary_color="${secondary_override:-$(showy_bar_role_color secondary "${s_remaining}")}"
-    bg_color=$(showy_bar_palette bg)
-    surface_color=$(showy_bar_palette surface)
-    elapsed_color=$(showy_bar_palette elapsed)
+    primary_color="${primary_override:-$(showy_quota_role_color primary "${p_remaining}")}"
+    secondary_color="${secondary_override:-$(showy_quota_role_color secondary "${s_remaining}")}"
+    bg_color=$(showy_quota_palette bg)
+    surface_color=$(showy_quota_palette surface)
+    elapsed_color=$(showy_quota_palette elapsed)
 
     local p_fill s_fill marker i top_color bottom_color
-    p_fill=$(showy_bar_filled_cells "${p_remaining}" "${width}")
-    s_fill=$(showy_bar_filled_cells "${s_remaining}" "${width}")
-    marker=$(showy_bar_elapsed_marker_cell "${s_reset}" "${s_window}" "${width}" || true)
+    p_fill=$(showy_quota_filled_cells "${p_remaining}" "${width}")
+    s_fill=$(showy_quota_filled_cells "${s_remaining}" "${width}")
+    marker=$(showy_quota_elapsed_marker_cell "${s_reset}" "${s_window}" "${width}" || true)
 
     for (( i=0; i<width; i++ )); do
         if (( i < p_fill )); then top_color="${primary_color}"
@@ -90,28 +90,28 @@ tmux_dual_metric_bar() {
 tmux_tri_metric_bar() {
     local p_remaining="$1" s_remaining="$2" t_remaining="$3"
     local primary_override="${4:-}" secondary_override="${5:-}" tertiary_override="${6:-}"
-    local width="${SHOWY_BAR_TMUX_BAR_WIDTH:-${SHOWY_BAR_ZELLIJ_BAR_WIDTH:-12}}"
+    local width="${SHOWY_QUOTA_TMUX_BAR_WIDTH:-${SHOWY_QUOTA_ZELLIJ_BAR_WIDTH:-12}}"
     [[ "${width}" =~ ^[0-9]+$ ]] || width=12
     (( width < 8 )) && width=8
 
     local primary_color secondary_color tertiary_color bg_color surface_color
-    primary_color="${primary_override:-$(showy_bar_role_color primary "${p_remaining}")}"
-    secondary_color="${secondary_override:-$(showy_bar_role_color secondary "${s_remaining}")}"
-    tertiary_color="${tertiary_override:-$(showy_bar_role_color tertiary "${t_remaining}")}"
-    bg_color=$(showy_bar_palette bg)
-    surface_color=$(showy_bar_palette surface)
+    primary_color="${primary_override:-$(showy_quota_role_color primary "${p_remaining}")}"
+    secondary_color="${secondary_override:-$(showy_quota_role_color secondary "${s_remaining}")}"
+    tertiary_color="${tertiary_override:-$(showy_quota_role_color tertiary "${t_remaining}")}"
+    bg_color=$(showy_quota_palette bg)
+    surface_color=$(showy_quota_palette surface)
 
     local p_fill s_fill t_fill i mask char cell_color
-    p_fill=$(showy_bar_filled_cells "${p_remaining}" "${width}")
-    s_fill=$(showy_bar_filled_cells "${s_remaining}" "${width}")
-    t_fill=$(showy_bar_filled_cells "${t_remaining}" "${width}")
+    p_fill=$(showy_quota_filled_cells "${p_remaining}" "${width}")
+    s_fill=$(showy_quota_filled_cells "${s_remaining}" "${width}")
+    t_fill=$(showy_quota_filled_cells "${t_remaining}" "${width}")
 
     for (( i=0; i<width; i++ )); do
         mask=0
         (( i < p_fill )) && mask=$((mask | 1))
         (( i < s_fill )) && mask=$((mask | 2))
         (( i < t_fill )) && mask=$((mask | 4))
-        char=$(showy_bar_sextant_mask_char "${mask}")
+        char=$(showy_quota_sextant_mask_char "${mask}")
 
         if (( mask & 4 )); then cell_color="${tertiary_color}"
         elif (( mask & 2 )); then cell_color="${secondary_color}"
@@ -129,33 +129,33 @@ tmux_tri_metric_bar_mono() {
     local s_used="$7" s_reset="$8" s_window="$9"
     local t_used="${10}" t_reset="${11}" t_window="${12}"
     local mono_override="${13:-}"
-    local width="${SHOWY_BAR_TMUX_BAR_WIDTH:-${SHOWY_BAR_ZELLIJ_BAR_WIDTH:-12}}"
+    local width="${SHOWY_QUOTA_TMUX_BAR_WIDTH:-${SHOWY_QUOTA_ZELLIJ_BAR_WIDTH:-12}}"
     [[ "${width}" =~ ^[0-9]+$ ]] || width=12
     (( width < 8 )) && width=8
 
     local mono_color bg_color surface_color elapsed_color
-    mono_color="${mono_override:-$(showy_bar_mono3_color "${p_remaining}" "${s_remaining}" "${t_remaining}" "${p_used}" "${s_used}" "${t_used}")}"
-    bg_color=$(showy_bar_palette bg)
-    surface_color=$(showy_bar_palette surface)
-    elapsed_color=$(showy_bar_palette elapsed)
+    mono_color="${mono_override:-$(showy_quota_mono3_color "${p_remaining}" "${s_remaining}" "${t_remaining}" "${p_used}" "${s_used}" "${t_used}")}"
+    bg_color=$(showy_quota_palette bg)
+    surface_color=$(showy_quota_palette surface)
+    elapsed_color=$(showy_quota_palette elapsed)
 
     local p_fill s_fill t_fill marker i mask char cell_color
-    p_fill=$(showy_bar_filled_cells "${p_remaining}" "${width}")
-    s_fill=$(showy_bar_filled_cells "${s_remaining}" "${width}")
-    t_fill=$(showy_bar_filled_cells "${t_remaining}" "${width}")
-    marker=$(showy_bar_mono3_marker_boundary "${width}" \
+    p_fill=$(showy_quota_filled_cells "${p_remaining}" "${width}")
+    s_fill=$(showy_quota_filled_cells "${s_remaining}" "${width}")
+    t_fill=$(showy_quota_filled_cells "${t_remaining}" "${width}")
+    marker=$(showy_quota_mono3_marker_boundary "${width}" \
         "${p_used}" "${p_reset}" "${p_window}" \
         "${s_used}" "${s_reset}" "${s_window}" \
         "${t_used}" "${t_reset}" "${t_window}" || true)
 
-    if [[ "${SHOWY_BAR_MONO3_MARKER_STYLE:-replace}" == "replace" && "${marker}" == "${width}" ]]; then
+    if [[ "${SHOWY_QUOTA_MONO3_MARKER_STYLE:-replace}" == "replace" && "${marker}" == "${width}" ]]; then
         marker=$((width - 1))
     fi
 
     for (( i=0; i<width; i++ )); do
         if [[ "${marker}" =~ ^[0-9]+$ && "${i}" == "${marker}" ]]; then
             tmux_style_text '│' "${elapsed_color}" "${surface_color}"
-            if [[ "${SHOWY_BAR_MONO3_MARKER_STYLE:-replace}" == "replace" ]]; then
+            if [[ "${SHOWY_QUOTA_MONO3_MARKER_STYLE:-replace}" == "replace" ]]; then
                 continue
             fi
         fi
@@ -164,14 +164,14 @@ tmux_tri_metric_bar_mono() {
         (( i < p_fill )) && mask=$((mask | 1))
         (( i < s_fill )) && mask=$((mask | 2))
         (( i < t_fill )) && mask=$((mask | 4))
-        char=$(showy_bar_sextant_mask_char "${mask}")
+        char=$(showy_quota_sextant_mask_char "${mask}")
 
         if (( mask == 0 )); then cell_color="${surface_color}"
         else cell_color="${mono_color}"; fi
 
         tmux_style_text "${char}" "${cell_color}" "${surface_color}"
     done
-    if [[ "${SHOWY_BAR_MONO3_MARKER_STYLE:-replace}" != "replace" && "${marker}" =~ ^[0-9]+$ && "${marker}" == "${width}" ]]; then
+    if [[ "${SHOWY_QUOTA_MONO3_MARKER_STYLE:-replace}" != "replace" && "${marker}" =~ ^[0-9]+$ && "${marker}" == "${width}" ]]; then
         tmux_style_text '│' "${elapsed_color}" "${surface_color}"
     fi
     tmux_style_text '▏' "${bg_color}" "${surface_color}"
@@ -181,20 +181,20 @@ tmux_tri_metric_bar_mono() {
 # ── data load ──────────────────────────────────────────────────────
 
 if ! data=$("${FETCH}" 2>/dev/null) || [[ -z "${data}" ]]; then
-    tmux_style_text 'AI ?' "$(showy_bar_role_palette primary unknown)"
+    tmux_style_text 'AI ?' "$(showy_quota_role_palette primary unknown)"
     exit 0
 fi
 
-filtered=$(printf '%s' "${data}" | showy_bar_filter_renderable)
+filtered=$(printf '%s' "${data}" | showy_quota_filter_renderable)
 count=$(printf '%s' "${filtered}" | jq 'length')
 
 if (( count == 0 )); then
-    printf '%s' "$(tmux_dim)"; tmux_style_text 'AI idle' "$(showy_bar_role_palette primary unknown)"
+    printf '%s' "$(tmux_dim)"; tmux_style_text 'AI idle' "$(showy_quota_role_palette primary unknown)"
     exit 0
 fi
 
 stale=0
-if showy_bar_cache_stale_for "${SHOWY_BAR_USAGE_FILE}"; then
+if showy_quota_cache_stale_for "${SHOWY_QUOTA_USAGE_FILE}"; then
     stale=1
 fi
 
@@ -216,9 +216,9 @@ rows=$(printf '%s' "${filtered}" | jq -r '
     ] | map(tostring) | join("\u001f")')
 
 first_chunk=1
-chunk_bg=$(showy_bar_palette bg)
-stale_color=$(showy_bar_palette stale)
-countdown_warn=$(showy_bar_palette countdown_warn)
+chunk_bg=$(showy_quota_palette bg)
+stale_color=$(showy_quota_palette stale)
+countdown_warn=$(showy_quota_palette countdown_warn)
 while IFS=$'\x1f' read -r provider p_used p_reset p_window s_used s_reset s_window t_used t_reset t_window; do
     [[ -n "${provider}" ]] || continue
 
@@ -232,30 +232,30 @@ while IFS=$'\x1f' read -r provider p_used p_reset p_window s_used s_reset s_wind
         t_remaining=$((100 - t_used))
     fi
 
-    sigil=$(showy_bar_provider_sigil "${provider}")
+    sigil=$(showy_quota_provider_sigil "${provider}")
 
     minutes=""
     if [[ -n "${p_reset}" ]]; then
-        minutes=$(showy_bar_minutes_until "${p_reset}" || true)
+        minutes=$(showy_quota_minutes_until "${p_reset}" || true)
         if (( stale )) && [[ "${minutes}" == "0" ]]; then
-            reset_epoch=$(showy_bar_reset_epoch "${p_reset}" || true)
-            now_epoch=$(showy_bar_now_epoch)
+            reset_epoch=$(showy_quota_reset_epoch "${p_reset}" || true)
+            now_epoch=$(showy_quota_now_epoch)
             if [[ -n "${reset_epoch}" ]] && (( reset_epoch <= now_epoch )); then
                 minutes=""
             fi
         fi
     fi
-    countdown=$(showy_bar_primary_label "${minutes}" "${p_remaining}" "${p_reset}")
+    countdown=$(showy_quota_primary_label "${minutes}" "${p_remaining}" "${p_reset}")
 
-    time_color=$(showy_bar_palette countdown)
+    time_color=$(showy_quota_palette countdown)
     if (( stale )); then
         time_color="${stale_color}"
-    elif [[ -n "${minutes}" && "${minutes}" -lt "${SHOWY_BAR_TIME_WARN_MINUTES}" ]]; then
-        time_color=$(showy_bar_palette countdown_warn)
+    elif [[ -n "${minutes}" && "${minutes}" -lt "${SHOWY_QUOTA_TIME_WARN_MINUTES}" ]]; then
+        time_color=$(showy_quota_palette countdown_warn)
     fi
 
     if (( first_chunk )); then first_chunk=0
-    else tmux_style_text ' ' "$(showy_bar_palette bg)" "$(showy_bar_palette bg)"; fi
+    else tmux_style_text ' ' "$(showy_quota_palette bg)" "$(showy_quota_palette bg)"; fi
 
     marker_p_reset="${p_reset}"
     marker_p_window="${p_window}"
@@ -272,17 +272,17 @@ while IFS=$'\x1f' read -r provider p_used p_reset p_window s_used s_reset s_wind
         marker_t_window=""
     fi
 
-    surface_color=$(showy_bar_palette surface)
-    primary_color=$(showy_bar_role_color primary "${p_remaining}")
-    secondary_color=$(showy_bar_role_color secondary "${s_remaining}")
-    tertiary_color=$(showy_bar_role_color tertiary "${t_remaining}")
-    bar_mode=$(showy_bar_terminal_mode_for_provider "${provider}" \
+    surface_color=$(showy_quota_palette surface)
+    primary_color=$(showy_quota_role_color primary "${p_remaining}")
+    secondary_color=$(showy_quota_role_color secondary "${s_remaining}")
+    tertiary_color=$(showy_quota_role_color tertiary "${t_remaining}")
+    bar_mode=$(showy_quota_terminal_mode_for_provider "${provider}" \
         "${p_used}" "${p_reset}" "${p_window}" \
         "${s_used}" "${s_reset}" "${s_window}" \
         "${t_used}" "${t_reset}" "${t_window}")
     mono_color=""
     if [[ "${bar_mode}" == "mono3" ]]; then
-        mono_color=$(showy_bar_mono3_color "${p_remaining}" "${s_remaining}" "${t_remaining}" "${p_used}" "${s_used}" "${t_used}")
+        mono_color=$(showy_quota_mono3_color "${p_remaining}" "${s_remaining}" "${t_remaining}" "${p_used}" "${s_used}" "${t_used}")
         primary_color="${mono_color}"
     fi
     if (( stale )); then
@@ -315,6 +315,6 @@ while IFS=$'\x1f' read -r provider p_used p_reset p_window s_used s_reset s_wind
     tmux_style_text "${CAP_RIGHT}" "${surface_color}" "${chunk_bg}"
 done <<< "${rows}"
 if (( stale )); then
-    tmux_style_text ' ' "$(showy_bar_palette bg)" "$(showy_bar_palette bg)"
-    tmux_style_text "${SHOWY_BAR_STALE_GLYPH}" "${countdown_warn}" "${chunk_bg}" bold
+    tmux_style_text ' ' "$(showy_quota_palette bg)" "$(showy_quota_palette bg)"
+    tmux_style_text "${SHOWY_QUOTA_STALE_GLYPH}" "${countdown_warn}" "${chunk_bg}" bold
 fi
