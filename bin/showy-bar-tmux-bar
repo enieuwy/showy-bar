@@ -148,9 +148,16 @@ tmux_tri_metric_bar_mono() {
         "${s_used}" "${s_reset}" "${s_window}" \
         "${t_used}" "${t_reset}" "${t_window}" || true)
 
+    if [[ "${SHOWY_BAR_MONO3_MARKER_STYLE:-replace}" == "replace" && "${marker}" == "${width}" ]]; then
+        marker=$((width - 1))
+    fi
+
     for (( i=0; i<width; i++ )); do
         if [[ "${marker}" =~ ^[0-9]+$ && "${i}" == "${marker}" ]]; then
             tmux_style_text '│' "${elapsed_color}" "${surface_color}"
+            if [[ "${SHOWY_BAR_MONO3_MARKER_STYLE:-replace}" == "replace" ]]; then
+                continue
+            fi
         fi
 
         mask=0
@@ -164,7 +171,7 @@ tmux_tri_metric_bar_mono() {
 
         tmux_style_text "${char}" "${cell_color}" "${surface_color}"
     done
-    if [[ "${marker}" =~ ^[0-9]+$ && "${marker}" == "${width}" ]]; then
+    if [[ "${SHOWY_BAR_MONO3_MARKER_STYLE:-replace}" != "replace" && "${marker}" =~ ^[0-9]+$ && "${marker}" == "${width}" ]]; then
         tmux_style_text '│' "${elapsed_color}" "${surface_color}"
     fi
     tmux_style_text '▏' "${bg_color}" "${surface_color}"

@@ -681,21 +681,23 @@ assert_contains "zellij sextant3 renders three stacked row geometry" "CL▕█�
 assert_not_contains "zellij sextant3 omits half-block cells" "▀" "${out}"
 
 out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
-assert_contains "zellij auto mono3 uses primary marker by default" "GE▕██🬎│🬎🬂🬂  ▏" "${out}"
+assert_contains "zellij auto mono3 uses primary marker by default" "GE▕██🬎│🬂🬂  ▏" "${out}"
 assert_not_contains "zellij auto mono3 omits half-block cells" "▀" "${out}"
 
 out=$(run_renderer showy-bar-zellij-bar "${mono_antigravity_fixture}" SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
-assert_contains "zellij auto mono3 includes antigravity by default" "AG▕██🬎│🬎🬂🬂  ▏" "${out}"
+assert_contains "zellij auto mono3 includes antigravity by default" "AG▕██🬎│🬂🬂  ▏" "${out}"
 
+out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_MONO3_MARKER_STYLE=insert SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
+assert_contains "zellij auto mono3 insert style preserves characters" "GE▕██🬎│🬎🬂🬂  ▏" "${out}"
 
 out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070914800 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
-assert_contains "zellij auto mono3 primary boundary zero starts after left separator" "GE▕│██🬎🬎🬂🬂  ▏" "${out}"
+assert_contains "zellij auto mono3 primary boundary zero starts after left separator" "GE▕│█🬎🬎🬂🬂  ▏" "${out}"
 
 out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070908800 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
-assert_contains "zellij auto mono3 primary boundary width ends before right cap" "GE▕██🬎🬎🬂🬂  │▏" "${out}"
+assert_contains "zellij auto mono3 primary boundary width replaces last cell" "GE▕██🬎🬎🬂🬂 │▏" "${out}"
 
 out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_MONO3_MARKER_SOURCE=secondary SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
-assert_contains "zellij auto mono3 marker source can use secondary" "GE▕██🬎🬎🬂│🬂  ▏" "${out}"
+assert_contains "zellij auto mono3 marker source can use secondary" "GE▕██🬎🬎🬂│  ▏" "${out}"
 
 out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_MONO3_MARKER_SOURCE=none SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
 assert_contains "zellij auto mono3 marker source can be disabled" "GE▕██🬎🬎🬂🬂  ▏" "${out}"
@@ -703,7 +705,7 @@ assert_not_contains "zellij auto mono3 disabled marker omits separator" "│" "$
 
 
 out=$(run_renderer showy-bar-zellij-bar "${mono_claude_fixture}" SHOWY_BAR_MONO3_PROVIDERS=claude SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
-assert_contains "zellij provider mono3 override uses mono marker path" "CL▕██🬎│🬎🬂🬂  ▏" "${out}"
+assert_contains "zellij provider mono3 override uses mono marker path" "CL▕██🬎│🬂🬂  ▏" "${out}"
 assert_not_contains "zellij provider mono3 override omits half-block cells" "▀" "${out}"
 
 out=$(run_renderer showy-bar-zellij-bar "${mono_fixture}" SHOWY_BAR_MONO3_PROVIDERS_EXCLUDE=gemini SHOWY_BAR_ZELLIJ_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400 NO_COLOR=1 SHOWY_BAR_FORCE_COLOR=0)
@@ -756,17 +758,21 @@ assert_not_contains "tmux sextant3 omits elapsed markers" "be95ff" "${out}"
 
 out=$(run_renderer showy-bar-tmux-bar "${mono_fixture}" SHOWY_BAR_TMUX_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400)
 visible=$(strip_tmux_markup "${out}")
-assert_contains "tmux auto mono3 visible output preserves separator geometry" "GE▕██🬎│🬎🬂🬂  ▏" "${visible}"
+assert_contains "tmux auto mono3 visible output preserves separator geometry" "GE▕██🬎│🬂🬂  ▏" "${visible}"
 assert_not_contains "tmux auto mono3 omits half-block cells" "▀" "${visible}"
 assert_contains "tmux auto mono3 colors separator with elapsed palette" "fg=#be95ff,bg=#2a2a2a]│" "${out}"
 assert_contains "tmux auto mono3 uses one primary-palette foreground" "fg=#f0af00,bg=#2a2a2a]█" "${out}"
 assert_contains "tmux auto mono3 colors combined sextants with primary foreground" "fg=#f0af00,bg=#2a2a2a]🬎" "${out}"
 assert_not_contains "tmux auto mono3 does not use bottom-role all-row color" "fg=#846000,bg=#2a2a2a]█" "${out}"
 assert_not_contains "tmux auto mono3 does not use role color for combined sextants" "fg=#846000,bg=#2a2a2a]🬎" "${out}"
+out=$(run_renderer showy-bar-tmux-bar "${mono_fixture}" SHOWY_BAR_TMUX_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070908800)
+visible=$(strip_tmux_markup "${out}")
+assert_contains "tmux auto mono3 primary boundary width replaces last cell" "GE▕██🬎🬎🬂🬂 │▏" "${visible}"
+
 
 out=$(run_renderer showy-bar-tmux-bar "${mono_claude_fixture}" SHOWY_BAR_MONO3_PROVIDERS=claude SHOWY_BAR_TMUX_BAR_WIDTH=8 SHOWY_BAR_REFRESH_SECONDS=9999999999 SHOWY_BAR_NOW_EPOCH=4070912400)
 visible=$(strip_tmux_markup "${out}")
-assert_contains "tmux provider mono3 override uses mono marker path" "CL▕██🬎│🬎🬂🬂  ▏" "${visible}"
+assert_contains "tmux provider mono3 override uses mono marker path" "CL▕██🬎│🬂🬂  ▏" "${visible}"
 assert_contains "tmux provider mono3 override colors separator with elapsed palette" "fg=#be95ff,bg=#2a2a2a]│" "${out}"
 
 

@@ -108,6 +108,7 @@ showy_bar_load_config
 : "${SHOWY_BAR_MONO3_PROVIDERS_EXCLUDE:=}"
 : "${SHOWY_BAR_MONO3_COLOR_MODE:=lowest}"
 : "${SHOWY_BAR_MONO3_MARKER_SOURCE:=primary}"
+: "${SHOWY_BAR_MONO3_MARKER_STYLE:=replace}"
 : "${SHOWY_BAR_ZELLIJ_BIN:=zellij}"
 : "${SHOWY_BAR_ZELLIJ_PLUGIN:=}"
 

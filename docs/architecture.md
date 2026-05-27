@@ -82,7 +82,9 @@ one provider-level foreground color (`SHOWY_BAR_MONO3_COLOR_MODE=lowest|primary`
 Because the terminal body can draw only one pacing separator, mono3 bases it on
 `SHOWY_BAR_MONO3_MARKER_SOURCE` (`primary` by default; `secondary`, `tertiary`,
 `shared`, and `none` are supported). The `shared` source only draws when at
-least two rows have the same parseable reset epoch and `windowMinutes`. Forced
+least two rows have the same parseable reset epoch and `windowMinutes`.
+`SHOWY_BAR_MONO3_MARKER_STYLE` controls whether the separator `replace`s the cell
+(preserving bar width) or `insert`s (widening the bar). Forced
 `SHOWY_BAR_TERMINAL_BAR_MODE=sextant3` keeps the older bottom-most-row cell-color
 policy and does not draw elapsed markers; forced `dual` and `mono3` apply those
 bodies to every provider.

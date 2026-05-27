@@ -28,7 +28,8 @@ remaining visible row using the primary palette; set it to `primary` to key off
 primary only. `SHOWY_BAR_MONO3_MARKER_SOURCE` selects the one mono3 pacing
 separator: `primary` (default), `secondary`, `tertiary`, `shared` (only when at
 least two rows share one parseable reset/window), or `none`. Stale snapshots
-hide mono3 pacing separators. Set `SHOWY_BAR_TERMINAL_BAR_MODE=dual`, `sextant3`,
+hide mono3 pacing separators. `SHOWY_BAR_MONO3_MARKER_STYLE` toggles the separator
+between `replace` (fixed width, default) and `insert`. Set `SHOWY_BAR_TERMINAL_BAR_MODE=dual`, `sextant3`,
 or `mono3` to force one body mode for every provider. Forced `sextant3` uses
 the same top/middle/bottom geometry as `mono3`, but keeps the bottom-most filled
 row as the cell color and omits elapsed markers.
