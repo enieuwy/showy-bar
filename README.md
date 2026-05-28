@@ -22,13 +22,15 @@ Beautiful, themeable, minimal.
 ---
 
 ```
-codexbar serve → http://127.0.0.1:8080/usage
+codexbar serve → http://127.0.0.1:8080/health + /usage
+       ▲
+       │ auto-started by plugin/fetcher when absent
        │
        ├──► showy-quota-zellij.wasm              (standalone Zellij plugin)
        │
        ▼
-bin/showy-quota-fetch     ←  shared cache + flock + last-known-good
-       │  ~/.cache/showy-quota/usage.json
+bin/showy-quota-fetch     ←  shared cache + source marker + flock + last-known-good
+       │  ~/.cache/showy-quota/usage.json + source
        ├──► bin/showy-quota-state                 (stable provider/layout state JSON)
        ├──► sketchybar/plugins/showy_quota.sh    (native SketchyBar rows + icons)
        ├──► bin/showy-quota-tmux-bar             (tmux #[…] markup for status-right)
@@ -56,12 +58,20 @@ bin/showy-quota-fetch     ←  shared cache + flock + last-known-good
    **System Settings → Privacy & Security**. If `jq length` prints `0`, fix
    CodexBar before continuing — showy-quota has nothing to paint without it.
 
-2. **Install showy-quota shell scripts for SketchyBar/tmux, or the Zellij plugin.**
+2. **Install showy-quota for the UI you use.**
+
+   Shell integrations (SketchyBar/tmux):
 
    ```sh
    git clone https://github.com/enieuwy/showy-quota && cd showy-quota
-   make doctor                    # bash 4+, jq, codexbar present for shell integrations
+   make doctor                    # bash 4+, jq, codexbar present
    make install                   # symlinks bin/* into ~/.local/bin
+   ```
+
+   Zellij plugin from source:
+
+   ```sh
+   git clone https://github.com/enieuwy/showy-quota && cd showy-quota
    make install-plugin            # builds + installs showy-quota-zellij.wasm
    ```
 
@@ -169,8 +179,11 @@ state a bug report needs.
 - **macOS** for SketchyBar. Zellij/tmux bars also work on Linux when CodexBar
   can fetch your chosen providers.
 - A CodexBar data source:
-  - Zellij plugin: `codexbar serve` reachable at `http://127.0.0.1:8080/usage`;
-  - shell integrations: same serve URL preferred, with `codexbar` CLI fallback.
+  - Zellij plugin: `codexbar` on the Zellij server `PATH`; the plugin starts
+    `codexbar serve` by default, uses `/health` + `/usage`, and visibly marks
+    CLI fallback as `⚠cli`;
+  - shell integrations: same managed serve path via `showy-quota-fetch`, with
+    visible `⚠cli` fallback.
   CodexBar's web-backed providers remain macOS-only; CLI/OAuth/API/local
   providers work where CodexBar supports them.
 - Shell integrations need `bash` 4+, `jq`, and a `date` that understands either
@@ -179,11 +192,12 @@ state a bug report needs.
 - SketchyBar integration also needs `sketchybar` on the PATH. Font icon mode
   needs `sketchybar-app-font`; SVG fallback icons need ImageMagick 7+
   (`magick`). Native usage rows do not need `magick`.
-- The Zellij renderer wraps each provider chunk in Powerline-Extra end
-  caps (U+E0B6 / U+E0B4). Any Nerd Font ships these; with a non-Nerd
-  font, set `SHOWY_QUOTA_CAP_LEFT=` / `SHOWY_QUOTA_CAP_RIGHT=` to blank
-  them. Terminal sextant modes have additional font notes in `docs/zellij.md`
-  and `docs/tmux.md`.
+- The Zellij/tmux renderers wrap each provider chunk in Powerline-Extra end
+  caps (U+E0B6 / U+E0B4). Any Nerd Font ships these. For the standalone
+  Zellij plugin with a non-Nerd font, set `cap_left ""` and `cap_right ""`
+  in the plugin KDL; for tmux or advanced zjstatus, set
+  `SHOWY_QUOTA_CAP_LEFT=` / `SHOWY_QUOTA_CAP_RIGHT=`. Terminal sextant modes
+  have additional font notes in `docs/zellij.md` and `docs/tmux.md`.
 - Optional: `flock` for inter-process locking; falls back to an owner-scoped
   `mkdir` lock when missing.
 
@@ -202,7 +216,9 @@ Most users only need these; the full environment surface lives in
 | `SHOWY_QUOTA_PROVIDERS_EXCLUDE` | empty | Provider deny-list applied after the allow-list. |
 | `SHOWY_QUOTA_PROVIDER_ORDER` | `codex,claude,opencode,gemini` | Stable render order without filtering. |
 | `SHOWY_QUOTA_REFRESH_SECONDS` | `120` | Slow CLI fallback refresh interval. |
+| `SHOWY_QUOTA_MANAGE_SERVE` | `1` | Start `codexbar serve` automatically before CLI fallback; set `0` to disable. |
 | `SHOWY_QUOTA_CODEXBAR_SERVE_URL` | `http://127.0.0.1:8080` | Local `codexbar serve` base URL; set empty to skip HTTP probing. |
+| `SHOWY_QUOTA_CODEXBAR_SERVE_PORT` | `8080` | Port passed to managed `codexbar serve --port`. |
 | `SHOWY_QUOTA_CODEXBAR_SERVE_REFRESH_SECONDS` | `10` | Refresh interval when `codexbar serve` is available. |
 | `SHOWY_QUOTA_TIME_WARN_MINUTES` | `30` | Urgent countdown threshold. |
 | `SHOWY_QUOTA_SKETCHYBAR_CLICK` | `open -b com.steipete.codexbar` | Default SketchyBar click action; degraded icons open provider status URLs. |
@@ -242,9 +258,9 @@ Cache lives at `${XDG_CACHE_HOME:-~/.cache}/showy-quota/usage.json`.
 
 ## How it stays cheap
 
-- tmux, SketchyBar, and advanced zjstatus share one cached fetcher, preferring
-  `codexbar serve` and falling back to the CLI.
-- The standalone Zellij plugin fetches `codexbar serve` directly and keeps
+- tmux, SketchyBar, and advanced zjstatus share one cached fetcher. It prefers
+  `codexbar serve`, starts it when absent, and marks CLI fallback as `⚠cli`.
+- The standalone Zellij plugin uses the same serve-first shape and keeps
   in-memory last-known-good output per pane.
 
 ## License

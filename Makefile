@@ -14,8 +14,14 @@ ZELLIJ_PLUGINS ?= $(HOME)/.config/zellij/plugins
 SBAR_ITEMS    ?= $(SKETCHYBAR)/items
 SBAR_PLUGINS  ?= $(SKETCHYBAR)/plugins
 FORCE         ?= 0
-CARGO         ?= $(shell if command -v rustup >/dev/null 2>&1; then printf 'rustup run stable cargo'; else printf 'cargo'; fi)
-RUSTC         ?= $(shell if command -v rustup >/dev/null 2>&1; then rustup which rustc; else printf 'rustc'; fi)
+CARGO         ?= cargo
+RUSTC         ?= rustc
+PLUGIN_TARGET_ADD := true
+ifeq ($(shell command -v rustup >/dev/null 2>&1 && echo yes),yes)
+CARGO         := rustup run stable cargo
+RUSTC         := $(shell rustup which --toolchain stable rustc 2>/dev/null || printf 'rustc')
+PLUGIN_TARGET_ADD := rustup target add --toolchain stable wasm32-wasip1
+endif
 
 REPO          := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BIN_NAMES     := showy-quota-fetch showy-quota-state showy-quota showy-quota-tmux-bar showy-quota-zellij-bar showy-quota-zellij-pipe
@@ -85,7 +91,7 @@ install-sketchybar:
 	done
 
 plugin: ## Build the standalone Zellij WASM plugin.
-	@if command -v rustup >/dev/null 2>&1; then rustup target add wasm32-wasip1 >/dev/null; fi
+	@$(PLUGIN_TARGET_ADD) >/dev/null
 	@RUSTC="$(RUSTC)" $(CARGO) build --release --target wasm32-wasip1 -p $(PLUGIN_CRATE)
 	@printf 'built %s\n' "$(PLUGIN_WASM)"
 
