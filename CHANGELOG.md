@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Standalone `showy-quota-zellij.wasm` plugin for Zellij. It fetches CodexBar
   serve directly, renders the quota strip in-process, and removes the normal
   Zellij dependency on `zjstatus`, feeder loops, and showy-quota shell scripts.
+- TPM-compatible `showy-quota.tmux` wrapper that wires the existing tmux
+  renderer into `status-right` and can optionally bind the detail popup.
 - Rust renderer parity tests that compare plugin output against the existing
   shell Zellij renderer over JSON fixtures.
 - `make plugin` / `make install-plugin` and a release workflow that attaches

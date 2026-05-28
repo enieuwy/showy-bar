@@ -74,7 +74,8 @@ bin/showy-quota-fetch     ←  shared cache + flock + last-known-good
 
    - **SketchyBar:** `make install-sketchybar`, then add
      `source "$ITEM_DIR/showy_quota.sh"` to your `sketchybarrc` and reload.
-   - **tmux:** paste the snippet in [tmux wiring](#tmux-wiring) into `~/.tmux.conf`.
+   - **tmux:** use the TPM wrapper or paste the snippet in
+     [tmux wiring](#tmux-wiring) into `~/.tmux.conf`.
    - **Zellij:** install `showy-quota-zellij.wasm`, paste the layout fragment.
      See [`docs/zellij.md`](docs/zellij.md) and [`docs/plugin.md`](docs/plugin.md).
 
@@ -109,6 +110,19 @@ showy-quota inside an existing multi-widget zjstatus row can keep using
 `showy-quota-zellij-pipe`; see [`docs/zellij.md`](docs/zellij.md).
 
 ### tmux wiring
+
+TPM users can install the wrapper directly:
+
+```tmux
+set -g @plugin 'enieuwy/showy-quota'
+
+# Optional: bind the detail popup. Pick any prefix-relative key you prefer.
+set -g @showy-quota-popup-key '/'
+```
+
+The TPM wrapper adds the existing `bin/showy-quota-tmux-bar` renderer to
+`status-right`; it does not introduce a second tmux implementation. Without
+TPM, wire the same renderer manually:
 
 ```sh
 # Use the absolute path — tmux's PATH at server start typically lacks ~/.local/bin.

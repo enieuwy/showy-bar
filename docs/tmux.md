@@ -61,6 +61,38 @@ that range, remove the provider from `SHOWY_QUOTA_MONO3_PROVIDERS`, or force
 `SHOWY_QUOTA_TERMINAL_BAR_MODE=dual`.
 
 
+## TPM plugin
+
+TPM users can let the repo wire tmux itself:
+
+```tmux
+set -g @plugin 'enieuwy/showy-quota'
+
+# Optional: bind the detail popup. Pick any prefix-relative key you prefer.
+set -g @showy-quota-popup-key '/'
+```
+
+The root `showy-quota.tmux` file is a thin wrapper around
+`bin/showy-quota-tmux-bar`. TPM clones the repo, executes the wrapper, and the
+wrapper appends the existing renderer to `status-right`. It does not replace
+the renderer or create a tmux-specific data path.
+
+Supported TPM options:
+
+```tmux
+set -g @showy-quota-position 'right'          # right, left, or off
+set -g @showy-quota-bin '~/.local/bin/showy-quota-tmux-bar'
+set -g @showy-quota-status-length '300'
+set -g @showy-quota-separator ' '
+set -g @showy-quota-popup-key '/'             # empty by default
+set -g @showy-quota-popup-height '36'
+set -g @showy-quota-popup-width '92'
+set -g @showy-quota-popup-interval '30'
+```
+
+Set `@showy-quota-popup-key` only if you want the plugin to bind a key; tmux's
+default `<prefix>/` binding is otherwise left alone.
+
 ## status-right
 
 Append to your existing `status-right` so `showy-quota` cohabits with

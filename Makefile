@@ -164,6 +164,7 @@ lint: ## Run shellcheck if available.
 			"$(REPO)/bin/showy-quota-tmux-bar" \
 			"$(REPO)/bin/showy-quota-zellij-bar" \
 			"$(REPO)/bin/showy-quota-zellij-pipe" \
+			"$(REPO)/showy-quota.tmux" \
 			"$(REPO)/lib/common.sh" \
 			"$(REPO)/lib/strip.sh" \
 			"$(REPO)/sketchybar/items/showy_quota.sh" \
